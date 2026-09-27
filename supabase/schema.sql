@@ -868,7 +868,7 @@ insert into public.categories (id, name, icon, color_from, color_to, daily_cap, 
   ('nutrition', 'Nutrition', 'apple',    '#1FD17A', '#B6F03C', 20, false, 3),
   ('study',     'Study',     'book',     '#3B82F6', '#22D3EE', 20, false, 4),
   ('sleep',     'Sleep',     'moon',     '#8B5CF6', '#C084FC', 20, false, 5),
-  ('vices',     'Slip-ups',  'skull',    '#F43F5E', '#991B1B', 40, true,  6)
+  ('vices',     'Slip-ups',  'skull',    '#F43F5E', '#991B1B', 55, true,  6)
 on conflict (id) do nothing;
 
 insert into public.activities (id, category_id, name, hint, icon, kind, points, unit, step, max_value, options, sort) values
@@ -887,7 +887,7 @@ insert into public.activities (id, category_id, name, hint, icon, kind, points, 
   ('junk',        'vices',     'Junk food',           '-5 per serving',         'pizza',      'count', 5, 'serving', 1, 3, null, 1),
   ('alcohol',     'vices',     'Alcohol',             null,                     'wine',       'check', 10, null, 1, null, null, 2),
   ('smoke',       'vices',     'Smoked',              null,                     'cigarette',  'check', 10, null, 1, null, null, 3),
-  ('weed',        'vices',     'Weed',                null,                     'leaf',       'check', 10, null, 1, null, null, 4)
+  ('weed',        'vices',     'Weed',                null,                     'leaf',       'check', 20, null, 1, null, null, 4)
 on conflict (id) do nothing;
 
 -- How much can be logged at most (points still stop at the caps above)

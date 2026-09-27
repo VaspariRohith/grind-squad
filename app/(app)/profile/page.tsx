@@ -8,14 +8,25 @@ import ProfileView from "@/components/ProfileView";
 import { Avatar, Sheet, toast } from "@/components/ui";
 import { errMsg, sb } from "@/lib/supabase";
 
-/** Shrinks a photo to a 256px square so uploads stay tiny (~20–40 KB). */
-async function squareImage(file: File, size = 256): Promise<Blob> {
+/** Crops a photo to a square and saves it sharp enough for the full-screen view
+ *  (up to 1024px), while staying under the storage limit of 1 MB. */
+async function squareImage(file: File, maxSize = 1024): Promise<Blob> {
   const bmp = await createImageBitmap(file);
   const side = Math.min(bmp.width, bmp.height);
+  const size = Math.min(maxSize, side); // never upscale small photos
   const canvas = document.createElement("canvas");
   canvas.width = canvas.height = size;
-  canvas.getContext("2d")!.drawImage(bmp, (bmp.width - side) / 2, (bmp.height - side) / 2, side, side, 0, 0, size, size);
-  return new Promise((res, rej) => canvas.toBlob((b) => (b ? res(b) : rej(new Error("Could not read image"))), "image/jpeg", 0.85));
+  const ctx = canvas.getContext("2d")!;
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
+  ctx.drawImage(bmp, (bmp.width - side) / 2, (bmp.height - side) / 2, side, side, 0, 0, size, size);
+  const toJpeg = (q: number) =>
+    new Promise<Blob>((res, rej) => canvas.toBlob((b) => (b ? res(b) : rej(new Error("Could not read image"))), "image/jpeg", q));
+  for (const q of [0.9, 0.82, 0.72, 0.6]) {
+    const blob = await toJpeg(q);
+    if (blob.size < 950_000) return blob;
+  }
+  return toJpeg(0.5);
 }
 
 export default function MyProfilePage() {

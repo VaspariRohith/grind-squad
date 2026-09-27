@@ -4,7 +4,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { CalendarDays, Flame, Lock, Star, Trophy, Zap } from "lucide-react";
 import AwardCard from "./AwardCard";
 import StreakBadgeArt from "./StreakBadgeArt";
-import { Avatar, Sheet } from "./ui";
+import { Avatar, PhotoViewer, Sheet } from "./ui";
 import { nextBadge, STREAK_BADGES, type StreakBadge } from "@/lib/badges";
 import { sb } from "@/lib/supabase";
 import type { Award, Profile } from "@/lib/types";
@@ -15,6 +15,7 @@ export default function ProfileView({ profile, actions }: { profile: Profile; ac
   const [stats, setStats] = useState<Stats | null>(null);
   const [awards, setAwards] = useState<Award[]>([]);
   const [openBadge, setOpenBadge] = useState<StreakBadge | null>(null);
+  const [viewPhoto, setViewPhoto] = useState(false);
 
   useEffect(() => {
     sb().rpc("profile_stats", { p_user: profile.id }).then(({ data }) => setStats(data?.[0] ?? null));
@@ -40,7 +41,13 @@ export default function ProfileView({ profile, actions }: { profile: Profile; ac
       <section className="card relative mt-2 overflow-hidden px-5 pb-5 text-center">
         <div className="absolute inset-x-0 top-0 h-28" style={{ background: "linear-gradient(135deg,#ff4d8d55,#8b5cf655,#22d3ee44)" }} />
         <div className="relative mt-10 flex justify-center">
-          <Avatar name={profile.display_name} url={profile.avatar_url} size={104} ring="#ff4d8d" />
+          {profile.avatar_url ? (
+            <button onClick={() => setViewPhoto(true)} aria-label="View photo" className="rounded-full transition active:scale-95">
+              <Avatar name={profile.display_name} url={profile.avatar_url} size={104} ring="#ff4d8d" />
+            </button>
+          ) : (
+            <Avatar name={profile.display_name} url={profile.avatar_url} size={104} ring="#ff4d8d" />
+          )}
         </div>
         <h1 className="relative mt-3 text-2xl font-black">{profile.display_name}</h1>
         <p className="relative text-sm font-semibold text-mute">@{profile.username}{profile.is_admin && " · admin"}</p>
@@ -106,6 +113,8 @@ export default function ProfileView({ profile, actions }: { profile: Profile; ac
           <div className="space-y-2">{awards.map((a) => <AwardCard key={a.id} award={a} />)}</div>
         )}
       </section>
+
+      {viewPhoto && profile.avatar_url && <PhotoViewer url={profile.avatar_url} name={profile.display_name} onClose={() => setViewPhoto(false)} />}
 
       <Sheet open={!!openBadge} onClose={() => setOpenBadge(null)} title={openBadge?.name}>
         {openBadge && (

@@ -29,6 +29,30 @@ export function Avatar({ name, url, size = 44, ring }: { name: string; url?: str
   );
 }
 
+/* ---------------- Full-screen photo viewer ---------------- */
+export function PhotoViewer({ url, name, onClose }: { url: string; name: string; onClose: () => void }) {
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", onKey);
+    return () => { document.body.style.overflow = prev; window.removeEventListener("keydown", onKey); };
+  }, [onClose]);
+  return createPortal(
+    <div className="fade-in fixed inset-0 z-[70] flex flex-col items-center justify-center bg-black/95 p-4" onClick={onClose}>
+      <button onClick={onClose} aria-label="Close" className="pt-safe absolute top-3 right-4 grid h-10 w-10 place-items-center rounded-full bg-white/10">
+        <X className="h-5 w-5" />
+      </button>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={url} alt={name} decoding="async"
+        className="aspect-square w-full max-w-[min(92vw,640px)] rounded-3xl object-cover shadow-2xl"
+        style={{ imageRendering: "auto" }} />
+      <p className="mt-4 text-lg font-bold">{name}</p>
+    </div>,
+    document.body,
+  );
+}
+
 /* ---------------- Toggle (iOS-style switch) ---------------- */
 export function Toggle({ on, onChange, from = "#ff4d8d", to = "#ff9a3d", disabled }: {
   on: boolean; onChange: (v: boolean) => void; from?: string; to?: string; disabled?: boolean;

@@ -378,6 +378,19 @@ console.log("\nMigration 002 (old database -> new rules)");
   const sAct = (await q2("select id from activities where category_id='study' and active")).map((r) => r.id);
   const rLogs = (await q2("select count(*)::int c from logs where activity_id='reading'"))[0].c;
   ok(sAct.join() === "study_time" && rLogs === 0, `study list is just Study; today's reading dropped (${sAct}, ${rLogs} left)`);
+
+  // Migration 008: weed -20, slip-ups cap 55
+  await db2.exec(`set role authenticated;`);
+  for (const v of ["junk", "alcohol", "smoke", "weed"]) await q2("select set_log($1,$2,$3)", [d, v, v === "junk" ? 3 : 1]);
+  await db2.exec(`reset role;`);
+  const m8 = readFileSync(new URL("../migrations/008_weed_minus_20.sql", import.meta.url), "utf8");
+  await db2.exec(m8); await db2.exec(m8);
+  const wp = (await q2("select points from logs where activity_id='weed'"))[0].points;
+  const vices = (await q2("select sum(points)::int s from logs where category_id='vices'"))[0].s;
+  const uid2 = (await q2("select id from profiles limit 1"))[0].id;
+  const dp = (await q2("select * from daily_points($1,$1,$2)", [d, uid2]))[0];
+  const posOnly = (await q2("select coalesce(sum(least(t.p, c.daily_cap)),0)::int s from (select category_id, sum(points) p from logs where not is_negative and day=$1 group by 1) t join categories c on c.id=t.category_id", [d]))[0].s;
+  ok(wp === -20 && vices === -55 && dp.log_points === posOnly - 55, `weed -20; all slip-ups count in full (-55); day score ${dp.log_points}`);
 }
 console.log(failures ? `\n${failures} FAILURE(S)` : "\nAll tests passed.");
 process.exit(failures ? 1 : 0);
