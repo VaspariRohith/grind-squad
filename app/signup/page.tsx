@@ -11,6 +11,7 @@ export default function SignupPage() {
   const router = useRouter();
   const [code, setCode] = useState("");
   const [username, setUsername] = useState("");
+  const [emailNote, setEmailNote] = useState(false);
   const [displayName, setDisplayName] = useState("");
   const [password, setPassword] = useState("");
   const [show, setShow] = useState(false);
@@ -61,9 +62,15 @@ export default function SignupPage() {
         </div>
         <div>
           <input className="field" placeholder="Username" autoCapitalize="none" autoCorrect="off" autoComplete="username"
-            value={username} onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ""))} maxLength={20} required />
-          <p className={`mt-1.5 px-1 text-xs ${username && !usernameOk ? "text-amber-400" : "text-mute"}`}>
-            You log in with this. Lowercase letters, numbers, _ (3–20).
+            value={username} maxLength={40} required
+            onChange={(e) => {
+              let v = e.target.value.toLowerCase();
+              // People often type their email here. Keep just the part before the @.
+              if (v.includes("@")) { v = v.split("@")[0]; setEmailNote(true); }
+              setUsername(v.replace(/[^a-z0-9_]/g, "").slice(0, 20));
+            }} />
+          <p className={`mt-1.5 px-1 text-xs ${emailNote || (username && !usernameOk) ? "text-amber-400" : "text-mute"}`}>
+            {emailNote ? "No email needed. Just a short name like \"tarun\"." : "A short name you log in with, not your email. Lowercase, numbers, _ (3–20)."}
           </p>
         </div>
         <input className="field" placeholder="Display name (what friends see)" maxLength={30}

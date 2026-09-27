@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import {
-  Check, Copy, Download, Gavel, KeyRound, Plus, Share, ShieldCheck, Snowflake, Ticket, Trash2, UserX, X, Scale, Users, SlidersHorizontal,
+  AtSign, Check, Copy, Download, Gavel, KeyRound, Plus, Share, ShieldCheck, Snowflake, Ticket, Trash2, UserX, X, Scale, Users, SlidersHorizontal,
 } from "lucide-react";
 import { useApp } from "@/components/AppProvider";
 import Icon from "@/components/Icon";
@@ -10,7 +10,7 @@ import { rangeLabel } from "@/components/FreezeSheet";
 import { Avatar, PageHeader, Sheet, Toggle, toast } from "@/components/ui";
 import { dayLabel, niceDate, timeAgo } from "@/lib/dates";
 import { fmtPoints } from "@/lib/scoring";
-import { errMsg, sb } from "@/lib/supabase";
+import { errMsg, sb, USERNAME_RE } from "@/lib/supabase";
 import { copyText } from "@/lib/clipboard";
 import type { Adjustment, Freeze, InviteCode, Log, Profile, Report } from "@/lib/types";
 
@@ -434,6 +434,8 @@ function Members() {
   const { members, me, reload } = useApp();
   const [pwFor, setPwFor] = useState<Profile | null>(null);
   const [delFor, setDelFor] = useState<Profile | null>(null);
+  const [renameFor, setRenameFor] = useState<Profile | null>(null);
+  const [newName, setNewName] = useState("");
   const [pw, setPw] = useState("");
   const [confirm, setConfirm] = useState("");
   const [busy, setBusy] = useState(false);
@@ -463,6 +465,16 @@ function Members() {
     catch (e) { toast.err(errMsg(e)); }
     setBusy(false);
   };
+  const rename = async () => {
+    if (!renameFor) return;
+    setBusy(true);
+    try {
+      await call({ action: "rename", userId: renameFor.id, username: newName });
+      toast.ok(`@${renameFor.username} is now @${newName}. Same password.`);
+      setRenameFor(null); setNewName(""); await reload();
+    } catch (e) { toast.err(errMsg(e)); }
+    setBusy(false);
+  };
   const setAdmin = async (p: Profile, v: boolean) => {
     const { error } = await sb().rpc("admin_set_admin", { p_user: p.id, p_admin: v });
     if (error) return toast.err(errMsg(error));
@@ -485,12 +497,25 @@ function Members() {
             </div>
           </div>
           <div className="mt-3 grid grid-cols-2 gap-2">
+            <button className="btn btn-ghost col-span-2 py-2 text-sm" onClick={() => { setRenameFor(m); setNewName(m.username); }}><AtSign className="h-4 w-4" /> Change username</button>
             <button className="btn btn-ghost py-2 text-sm" onClick={() => setPwFor(m)}><KeyRound className="h-4 w-4" /> Reset password</button>
             <button className="btn btn-danger py-2 text-sm" disabled={m.id === me.id} onClick={() => setDelFor(m)}><UserX className="h-4 w-4" /> Remove</button>
           </div>
         </div>
       ))}
 
+      <Sheet open={!!renameFor} onClose={() => setRenameFor(null)} title={`Change @${renameFor?.username}`}>
+        <p className="mb-3 text-sm text-soft">This is what they type to log in. Their password, points and streaks stay the same.</p>
+        <div className="relative">
+          <AtSign className="absolute top-1/2 left-4 h-5 w-5 -translate-y-1/2 text-mute" />
+          <input className="field pl-11" placeholder="new username" autoCapitalize="none" autoCorrect="off" maxLength={20}
+            value={newName} onChange={(e) => setNewName(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ""))} />
+        </div>
+        <p className="mt-1.5 px-1 text-xs text-mute">Lowercase letters, numbers, _ (3–20)</p>
+        <button className="btn btn-primary mt-4 w-full" disabled={busy || !USERNAME_RE.test(newName) || newName === renameFor?.username} onClick={rename}>
+          {busy ? "Saving…" : "Save username"}
+        </button>
+      </Sheet>
       <Sheet open={!!pwFor} onClose={() => setPwFor(null)} title={`Reset @${pwFor?.username}`}>
         <p className="mb-3 text-sm text-soft">Set a temporary password and send it to them. They can change it from their profile.</p>
         <input className="field" placeholder="New password (6+ characters)" value={pw} onChange={(e) => setPw(e.target.value)} />
