@@ -845,6 +845,10 @@ insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_typ
 values ('avatars', 'avatars', true, 1048576, array['image/jpeg', 'image/png', 'image/webp'])
 on conflict (id) do nothing;
 
+-- Uploads read the saved row back, so signed-in users need read access too
+drop policy if exists "avatar read" on storage.objects;
+create policy "avatar read" on storage.objects for select to authenticated
+  using (bucket_id = 'avatars');
 drop policy if exists "avatar insert own" on storage.objects;
 create policy "avatar insert own" on storage.objects for insert to authenticated
   with check (bucket_id = 'avatars' and (storage.foldername(name))[1] = auth.uid()::text);
