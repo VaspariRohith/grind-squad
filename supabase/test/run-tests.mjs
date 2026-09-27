@@ -88,19 +88,20 @@ console.log("\nLogging");
 await asUser(amit);
 await q("select set_log($1,'gym',1)", [T]);
 await q("select set_log($1,'run',1)", [T]);
-await q("select set_log($1,'workout',1)", [T]);     // fitness raw 40, cap 30
+for (const a of ['protein','water','greens','homecooked','supplements']) await q("select set_log($1,$2,1)", [T, a]); // nutrition raw 22, cap 20
 await q("select set_log($1,'study_time',150)", [T]); // capped at 120 min -> 20
 await q("select set_log($1,'sleep_hours',480)", [T]); // 8h sleep -> 15
 await q("select set_log($1,'junk',5)", [T]);         // max 3 servings -> -15
 await q("select set_log($1,'alcohol',1)", [T]);      // -10
 let pts = await q("select * from daily_points($1,$1,$2)", [T, amit]);
-ok(pts[0].points === 30 + 20 + 15 - 25, `capped daily score = ${pts[0].points} (expected 40)`);
+ok(pts[0].points === 30 + 20 + 20 + 15 - 25, `capped daily score = ${pts[0].points} (expected 60)`);
 await q("select set_log($1,'gym',1)", [addDays(-1)]);
 ok(true, "can log yesterday");
 await expectError(() => q("select set_log($1,'gym',1)", [addDays(-2)]), "only log today or yesterday", "2 days ago blocked");
 await expectError(() => q("select set_log($1,'gym',1)", [addDays(1)]), "only log today or yesterday", "tomorrow blocked");
-await q("select set_log($1,'workout',0)", [T]);
-ok((await q("select count(*)::int c from logs where user_id=$1 and activity_id='workout'", [amit]))[0].c === 0, "value 0 removes entry");
+await q("select set_log($1,'reading',1)", [T]);
+await q("select set_log($1,'reading',0)", [T]);
+ok((await q("select count(*)::int c from logs where user_id=$1 and activity_id='reading'", [amit]))[0].c === 0, "value 0 removes entry");
 await expectError(() => q("insert into logs (user_id, day, activity_id, category_id) values ($1,$2,'gym','fitness')", [amit, T]), "permission", "direct insert into logs blocked");
 await expectError(() => q("update profiles set is_admin = true where id = $1", [amit]), "permission", "user can't make self admin");
 await q("update profiles set display_name='Amit K' where id=$1", [amit]);
@@ -131,7 +132,7 @@ const seen = await q("select activity_id from logs where user_id=$1", [amit]);
 ok(!seen.some((r) => ["junk", "alcohol"].includes(r.activity_id)), "others can't see junk/alcohol entries");
 ok(seen.some((r) => r.activity_id === "gym"), "others can see gym entry");
 const lbSam = await q("select * from leaderboard($1,$1)", [T]);
-ok(lbSam.find((r) => r.username === "amit").points === 40, "but net score includes negatives");
+ok(lbSam.find((r) => r.username === "amit").points === 60, "but net score includes negatives");
 ok((await q("select count(*)::int c from invite_codes"))[0].c === 0, "non-admin sees 0 invite codes");
 await asUser(rohith);
 ok((await q("select count(*)::int c from invite_codes"))[0].c === 40, "admin sees all invite codes");
@@ -158,7 +159,7 @@ await q("insert into adjustments (user_id, points, reason) values ($1, -20, 'Fak
 await asUser(neha);
 await expectError(() => q("insert into adjustments (user_id, points, reason) values ($1, 50, 'lol')", [neha]), null, "non-admin can't add points");
 const lb = await q("select * from leaderboard($1,$1)", [T]);
-ok(lb.find((r) => r.username === "amit").points === 20, "adjustment applied (40 - 20 = 20)");
+ok(lb.find((r) => r.username === "amit").points === 40, "adjustment applied (60 - 20 = 40)");
 ok(lb.find((r) => r.username === "sam").points === 0, "sam frozen = 0");
 
 // ---- Reports ----
@@ -330,6 +331,19 @@ console.log("\nMigration 002 (old database -> new rules)");
   await db2.exec(`set role authenticated;`);
   ok((await q2("select points from set_log($1,'sleep_hours',300)", [d]))[0].points === 8, "new sleep clock works after migration");
   await expectError(() => q2("select set_log($1,'study_time',1000)", [d]), "more than the max", "16h study limit works after migration");
+
+  // Migration 004: simpler fitness
+  await q2("select set_log($1,'workout',1)", [d]);   // old home workout
+  await q2("select set_log($1,'steps',1)", [d]);     // old 10k steps
+  await q2("select set_log($1,'stretch',1)", [d]);   // removed item
+  await db2.exec(`reset role;`);
+  const m4 = readFileSync(new URL("../migrations/004_simplify_fitness.sql", import.meta.url), "utf8");
+  await db2.exec(m4); await db2.exec(m4);
+  const fit = (await q2("select activity_id, points from logs where category_id='fitness' order by activity_id"));
+  ok(JSON.stringify(fit) === JSON.stringify([{ activity_id: "gym", points: 15 }, { activity_id: "run", points: 15 }]),
+    `today's home workout -> Workout, steps -> Run or 10k steps, stretch dropped (${JSON.stringify(fit)})`);
+  const active = (await q2("select id from activities where category_id='fitness' and active order by sort")).map((r) => r.id);
+  ok(active.join() === "gym,run", `fitness now shows only Workout + Run or 10k steps (${active})`);
 }
 console.log(failures ? `\n${failures} FAILURE(S)` : "\nAll tests passed.");
 process.exit(failures ? 1 : 0);
