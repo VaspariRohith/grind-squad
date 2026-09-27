@@ -1,7 +1,7 @@
 import {
   Activity, AlarmClock, Apple, Bed, Beef, Book, BookOpen, ChefHat, Cigarette, Droplets, Dumbbell,
   Flame, Footprints, Leaf, Moon, MoonStar, PersonStanding, Pill, Pizza, Salad, Skull, Sparkles,
-  Sun, SunMedium, Timer, Wine, Star, type LucideIcon,
+  Sun, SunMedium, Target, Timer, Wine, Star, type LucideIcon,
 } from "lucide-react";
 
 const MAP: Record<string, LucideIcon> = {
@@ -9,7 +9,7 @@ const MAP: Record<string, LucideIcon> = {
   sun: Sun, "moon-star": MoonStar, "sun-medium": SunMedium, footprints: Footprints, flame: Flame,
   activity: Activity, stretch: PersonStanding, beef: Beef, droplets: Droplets, salad: Salad,
   "chef-hat": ChefHat, pill: Pill, timer: Timer, "book-open": BookOpen, bed: Bed,
-  "alarm-clock": AlarmClock, pizza: Pizza, wine: Wine, cigarette: Cigarette, leaf: Leaf,
+  "alarm-clock": AlarmClock, target: Target, pizza: Pizza, wine: Wine, cigarette: Cigarette, leaf: Leaf,
 };
 
 export default function Icon({ name, className, strokeWidth = 2.2 }: { name: string; className?: string; strokeWidth?: number }) {

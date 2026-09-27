@@ -88,7 +88,7 @@ console.log("\nLogging");
 await asUser(amit);
 await q("select set_log($1,'gym',1)", [T]);
 await q("select set_log($1,'run',1)", [T]);
-for (const a of ['protein','water','greens','homecooked','supplements']) await q("select set_log($1,$2,1)", [T, a]); // nutrition raw 22, cap 20
+for (const a of ['protein','water','homecooked','reading']) await q("select set_log($1,$2,1)", [T, a]); // nutrition 20; study raw 23, cap 20
 await q("select set_log($1,'study_time',150)", [T]); // capped at 120 min -> 20
 await q("select set_log($1,'sleep_hours',480)", [T]); // 8h sleep -> 15
 await q("select set_log($1,'junk',5)", [T]);         // max 3 servings -> -15
@@ -344,6 +344,19 @@ console.log("\nMigration 002 (old database -> new rules)");
     `today's home workout -> Workout, steps -> Run or 10k steps, stretch dropped (${JSON.stringify(fit)})`);
   const active = (await q2("select id from activities where category_id='fitness' and active order by sort")).map((r) => r.id);
   ok(active.join() === "gym,run", `fitness now shows only Workout + Run or 10k steps (${active})`);
+
+  // Migration 005: simpler nutrition
+  await db2.exec(`set role authenticated;`);
+  for (const a of ["protein", "greens", "homecooked", "supplements"]) await q2("select set_log($1,$2,1)", [d, a]);
+  await db2.exec(`reset role;`);
+  const m5 = readFileSync(new URL("../migrations/005_simplify_nutrition.sql", import.meta.url), "utf8");
+  await db2.exec(m5); await db2.exec(m5);
+  const nut = await q2("select activity_id, points from logs where category_id='nutrition' order by activity_id");
+  ok(JSON.stringify(nut) === JSON.stringify([{ activity_id: "homecooked", points: 5 }, { activity_id: "protein", points: 10 }]),
+    `today's nutrition re-scored, removed items dropped (${JSON.stringify(nut)})`);
+  const nActive = (await q2("select name from activities where category_id='nutrition' and active order by sort")).map((r) => r.name);
+  ok(nActive.join(" / ") === "Hit calorie/diet goal / 3L water / Home-cooked meal", `nutrition list: ${nActive.join(" / ")}`);
+  ok((await q2("select name from activities where id='study_time'"))[0].name === "Study", "Focused study renamed to Study");
 }
 console.log(failures ? `\n${failures} FAILURE(S)` : "\nAll tests passed.");
 process.exit(failures ? 1 : 0);
