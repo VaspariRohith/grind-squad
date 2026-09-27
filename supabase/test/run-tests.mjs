@@ -89,7 +89,7 @@ await asUser(amit);
 await q("select set_log($1,'gym',1)", [T]);
 await q("select set_log($1,'run',1)", [T]);
 for (const a of ['protein','water','homecooked','reading']) await q("select set_log($1,$2,1)", [T, a]); // nutrition 20; study raw 23, cap 20
-await q("select set_log($1,'study_time',150)", [T]); // capped at 120 min -> 20
+await q("select set_log($1,'study_time',1)", [T]); // one toggle -> 20
 await q("select set_log($1,'sleep_hours',480)", [T]); // 8h sleep -> 15
 await q("select set_log($1,'junk',5)", [T]);         // max 3 servings -> -15
 await q("select set_log($1,'alcohol',1)", [T]);      // -10
@@ -119,10 +119,9 @@ ok(await sleepPts(420) === 15, "sleep 7h -> 15");
 ok(await sleepPts(540) === 15, "sleep 9h -> 15");
 ok(await sleepPts(570) === 10, "sleep 9.5h -> 10");
 await q("select set_log($1,'sleep_hours',0)", [T]);
-ok((await q("select points from set_log($1,'study_time',960)", [T]))[0].points === 20, "study 16h allowed, points capped at category max");
-await expectError(() => q("select set_log($1,'study_time',990)", [T]), "more than the max", "study over 16h rejected");
-await expectError(() => q("select set_log($1,'sleep_hours',510)", [T]), "24 hours", "16h study + 8.5h sleep rejected");
-ok((await q("select points from set_log($1,'sleep_hours',480)", [T]))[0].points === 15, "16h study + 8h sleep = 24h allowed");
+ok((await q("select points from set_log($1,'study_time',1)", [T]))[0].points === 20, "study toggle = full 20 points");
+ok((await q("select points from set_log($1,'sleep_hours',960)", [T]))[0].points === 10, "sleep up to 16h allowed");
+await expectError(() => q("select set_log($1,'sleep_hours',990)", [T]), "more than the max", "sleep over 16h rejected");
 await q("select set_log($1,'study_time',0)", [T]);
 await q("select set_log($1,'sleep_hours',0)", [T]);
 
@@ -166,7 +165,7 @@ ok(lb.find((r) => r.username === "sam").points === 0, "sam frozen = 0");
 console.log("\nReports + voting (5 members, 4 eligible voters, quorum 2)");
 await asUser(kai);
 const kg = (await q("select * from set_log($1,'gym',1)", [T]))[0];
-const ks = (await q("select * from set_log($1,'study_time',120)", [T]))[0];
+const ks = (await q("select * from set_log($1,'study_time',1)", [T]))[0];
 const kr = (await q("select * from set_log($1,'run',1)", [T]))[0];
 await expectError(() => q("select create_report($1,'self')", [kg.id]), "own entry", "can't report own entry");
 await asUser(amit);
@@ -357,6 +356,18 @@ console.log("\nMigration 002 (old database -> new rules)");
   const nActive = (await q2("select name from activities where category_id='nutrition' and active order by sort")).map((r) => r.name);
   ok(nActive.join(" / ") === "Hit calorie/diet goal / 3L water / Home-cooked meal", `nutrition list: ${nActive.join(" / ")}`);
   ok((await q2("select name from activities where id='study_time'"))[0].name === "Study", "Focused study renamed to Study");
+
+  // Migration 006: study is one toggle
+  await db2.exec(`set role authenticated;`);
+  await q2("select set_log($1,'study_time',90)", [d]); // 1.5h logged the old way
+  await db2.exec(`reset role;`);
+  const m6 = readFileSync(new URL("../migrations/006_study_one_toggle.sql", import.meta.url), "utf8");
+  await db2.exec(m6); await db2.exec(m6);
+  const st6 = (await q2("select value::int v, points from logs where activity_id='study_time'"))[0];
+  ok(st6.v === 1 && st6.points === 20, `today's 1.5h study became the toggle worth 20 (${JSON.stringify(st6)})`);
+  await db2.exec(`set role authenticated;`);
+  ok((await q2("select points from set_log($1,'study_time',1)", [d]))[0].points === 20, "study toggle works after migration");
+  await db2.exec(`reset role;`);
 }
 console.log(failures ? `\n${failures} FAILURE(S)` : "\nAll tests passed.");
 process.exit(failures ? 1 : 0);

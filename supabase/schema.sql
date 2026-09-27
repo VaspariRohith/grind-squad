@@ -880,7 +880,7 @@ insert into public.activities (id, category_id, name, hint, icon, kind, points, 
   ('protein',     'nutrition', 'Hit calorie/diet goal', 'Stuck to your plan today', 'target',   'check', 10, null, 1, null, null, 1),
   ('water',       'nutrition', '3L water',            null,                     'droplets',   'check', 5, null, 1, null, null, 2),
   ('homecooked',  'nutrition', 'Home-cooked meal',    null,                     'chef-hat',   'check', 5, null, 1, null, null, 3),
-  ('study_time',  'study',     'Study',               null,                     'timer',      'count', 5, 'min', 30, 120, null, 1),
+  ('study_time',  'study',     'Study',               'Anything, at least 30 min', 'book',     'check', 20, null, 1, null, null, 1),
   ('reading',     'study',     'Read 20 min',         'Books, not reels',       'book-open',  'check', 3, null, 1, null, null, 2),
   ('sleep_hours', 'sleep',     'Hours slept',         '7–9h is the sweet spot', 'bed',        'band', 0, 'min', 30, null,
      '[{"from":0,"label":"0–3h","points":0},{"from":240,"label":"4–6h","points":8},{"from":420,"label":"7–9h","points":15},{"from":570,"label":"9h+","points":10}]', 1),
@@ -892,7 +892,7 @@ insert into public.activities (id, category_id, name, hint, icon, kind, points, 
 on conflict (id) do nothing;
 
 -- How much can be logged at most (points still stop at the caps above)
-update public.activities set log_max = 960 where id in ('study_time', 'sleep_hours'); -- 16 hours
+update public.activities set log_max = 960 where id = 'sleep_hours'; -- 16 hours
 update public.activities set log_max = 10 where id = 'junk';
 
 -- 40 starter invite codes (random; see them in the Admin tab)
