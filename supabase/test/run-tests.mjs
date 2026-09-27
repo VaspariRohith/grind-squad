@@ -90,7 +90,7 @@ await q("select set_log($1,'gym',1)", [T]);
 await q("select set_log($1,'run',1)", [T]);
 await q("select set_log($1,'workout',1)", [T]);     // fitness raw 40, cap 30
 await q("select set_log($1,'study_time',150)", [T]); // capped at 120 min -> 20
-await q("select set_log($1,'sleep_hours',3)", [T]);  // 3rd option 7-9h -> 15
+await q("select set_log($1,'sleep_hours',480)", [T]); // 8h sleep -> 15
 await q("select set_log($1,'junk',5)", [T]);         // max 3 servings -> -15
 await q("select set_log($1,'alcohol',1)", [T]);      // -10
 let pts = await q("select * from daily_points($1,$1,$2)", [T, amit]);
@@ -107,6 +107,23 @@ await q("update profiles set display_name='Amit K' where id=$1", [amit]);
 ok((await q("select display_name from profiles where id=$1", [amit]))[0].display_name === "Amit K", "user can edit own name");
 await q("update profiles set display_name='hacked' where id=$1", [sam]);
 ok((await q("select display_name from profiles where id=$1", [sam]))[0].display_name === "Sam", "user can't edit someone else's name");
+
+console.log("\nStudy up to 16h, sleep bands, 24h rule");
+await asUser(neha);
+const sleepPts = async (min) => (await q("select points from set_log($1,'sleep_hours',$2)", [T, min]))[0].points;
+ok(await sleepPts(180) === 0, "sleep 3h -> 0");
+ok(await sleepPts(240) === 8, "sleep 4h -> 8");
+ok(await sleepPts(390) === 8, "sleep 6.5h -> 8");
+ok(await sleepPts(420) === 15, "sleep 7h -> 15");
+ok(await sleepPts(540) === 15, "sleep 9h -> 15");
+ok(await sleepPts(570) === 10, "sleep 9.5h -> 10");
+await q("select set_log($1,'sleep_hours',0)", [T]);
+ok((await q("select points from set_log($1,'study_time',960)", [T]))[0].points === 20, "study 16h allowed, points capped at category max");
+await expectError(() => q("select set_log($1,'study_time',990)", [T]), "more than the max", "study over 16h rejected");
+await expectError(() => q("select set_log($1,'sleep_hours',510)", [T]), "24 hours", "16h study + 8.5h sleep rejected");
+ok((await q("select points from set_log($1,'sleep_hours',480)", [T]))[0].points === 15, "16h study + 8h sleep = 24h allowed");
+await q("select set_log($1,'study_time',0)", [T]);
+await q("select set_log($1,'sleep_hours',0)", [T]);
 
 console.log("\nPrivacy of negatives");
 await asUser(sam);
@@ -280,5 +297,39 @@ await expectError(() => q("select * from leaderboard('2020-01-01','2030-01-01')"
 
 const lbFinal = await (async () => { await asUser(rohith); return q("select username, points, current_streak, rank from leaderboard($1,$1)", [T]); })();
 console.log("\nToday's leaderboard:", lbFinal);
+
+// ---- Migration 002 on a database built from the previous schema ----
+console.log("\nMigration 002 (old database -> new rules)");
+{
+  const { execSync } = await import("node:child_process");
+  const oldSql = execSync("git show 1f9e523:supabase/schema.sql", { encoding: "utf8" });
+  const db2 = new PGlite();
+  const q2 = async (sql, p) => (await db2.query(sql, p)).rows;
+  await db2.exec(`
+    create role anon nologin; create role authenticated nologin;
+    create schema auth;
+    create table auth.users (id uuid primary key default gen_random_uuid(), raw_user_meta_data jsonb default '{}', raw_app_meta_data jsonb default '{}');
+    create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
+    create schema storage;
+    create table storage.buckets (id text primary key, name text, public boolean, file_size_limit bigint, allowed_mime_types text[]);
+    create table storage.objects (id uuid default gen_random_uuid(), bucket_id text, name text);
+    create function storage.foldername(name text) returns text[] language sql as $$ select string_to_array(name, '/') $$;
+    grant usage on schema public, auth, storage to authenticated, anon;`);
+  await db2.exec(oldSql);
+  const code = (await q2("select code from invite_codes limit 1"))[0].code;
+  const uid = (await q2("insert into auth.users (raw_user_meta_data) values ($1) returning id", [{ username: "rohith", invite_code: code }]))[0].id;
+  await db2.exec(`select set_config('request.jwt.claim.sub', '${uid}', false); set role authenticated;`);
+  const d = (await q2("select app_today()::text d"))[0].d;
+  await q2("select set_log($1,'sleep_hours',3)", [d]); // old "7-9h" button
+  await db2.exec(`reset role;`);
+  const mig = readFileSync(new URL("../migrations/002_study_sleep_hours.sql", import.meta.url), "utf8");
+  await db2.exec(mig);
+  await db2.exec(mig); // running twice must be safe
+  const row = (await q2("select value::int v, points from logs where activity_id='sleep_hours'"))[0];
+  ok(row.v === 480 && row.points === 15, `old 7-9h entry became 8h / 15 pts (${row.v} min, ${row.points})`);
+  await db2.exec(`set role authenticated;`);
+  ok((await q2("select points from set_log($1,'sleep_hours',300)", [d]))[0].points === 8, "new sleep clock works after migration");
+  await expectError(() => q2("select set_log($1,'study_time',1000)", [d]), "more than the max", "16h study limit works after migration");
+}
 console.log(failures ? `\n${failures} FAILURE(S)` : "\nAll tests passed.");
 process.exit(failures ? 1 : 0);

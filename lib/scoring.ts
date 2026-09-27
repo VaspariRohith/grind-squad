@@ -9,6 +9,11 @@ export function activityPoints(a: Activity, value: number, negative: boolean): n
     const v = Math.min(value, a.max_value ?? value);
     return sign * Math.abs(a.points) * Math.floor(v / (a.step || 1));
   }
+  if (a.kind === "band") {
+    // the highest band whose "from" the value has reached
+    const band = [...(a.options ?? [])].filter((o) => (o.from ?? 0) <= value).sort((x, y) => (y.from ?? 0) - (x.from ?? 0))[0];
+    return band ? sign * Math.abs(band.points) : 0;
+  }
   const opt = a.options?.[value - 1]; // choice values start at 1
   return opt ? sign * Math.abs(opt.points) : 0;
 }

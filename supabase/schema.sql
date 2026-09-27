@@ -122,12 +122,14 @@ create table if not exists public.activities (
   name text not null,
   hint text,
   icon text not null,
-  kind text not null check (kind in ('check', 'count', 'choice')),
+  kind text not null check (kind in ('check', 'count', 'choice', 'band')),
   points int not null default 0,   -- check: points; count: points per step; choice: unused
   unit text,                        -- count: e.g. 'min', 'serving'
   step numeric not null default 1,  -- count: how much one step is (30 min)
   max_value numeric,                -- count: highest value that still earns points
+  log_max numeric,                  -- count/band: highest value you can log at all
   options jsonb,                    -- choice: [{"label":"7-9h","points":15}, ...]
+                                    -- band:   [{"from":420,"label":"7–9h","points":15}, ...]
   sort int not null default 0,
   active boolean not null default true
 );
@@ -167,6 +169,15 @@ begin
   elsif a.kind = 'count' then
     n := floor(least(v, coalesce(a.max_value, v)) / nullif(a.step, 0));
     return sign * abs(a.points) * coalesce(n, 0);
+  elsif a.kind = 'band' then
+    -- band: the value falls into the highest band whose "from" it has reached
+    if v <= 0 or a.options is null then return 0; end if;
+    select (o ->> 'points')::int into n
+      from jsonb_array_elements(a.options) o
+     where (o ->> 'from')::numeric <= v
+     order by (o ->> 'from')::numeric desc
+     limit 1;
+    return sign * abs(coalesce(n, 0));
   else
     -- choice: value 1 = first option, 2 = second, ... (0 = nothing picked)
     if a.options is null or v < 1 or v > jsonb_array_length(a.options) then return 0; end if;
@@ -410,6 +421,17 @@ begin
   if p_value is null or p_value <= 0 then
     delete from logs where id = v_existing.id;
     return null;
+  end if;
+
+  if a.log_max is not null and p_value > a.log_max then
+    raise exception 'That is more than the max for %', a.name;
+  end if;
+
+  -- Everything logged in minutes (study + sleep) must fit in one day
+  if a.unit = 'min' and p_value + coalesce((
+      select sum(l.value) from logs l join activities x on x.id = l.activity_id
+       where l.user_id = v_uid and l.day = p_day and x.unit = 'min' and l.activity_id <> p_activity), 0) > 1440 then
+    raise exception 'Study and sleep together can''t be more than 24 hours';
   end if;
 
   insert into logs (user_id, day, activity_id, category_id, value, points, is_negative)
@@ -859,16 +881,20 @@ insert into public.activities (id, category_id, name, hint, icon, kind, points, 
   ('greens',      'nutrition', 'Fruits & veggies',    'At least 2 servings',    'salad',      'check', 4, null, 1, null, null, 3),
   ('homecooked',  'nutrition', 'Home-cooked meal',    null,                     'chef-hat',   'check', 3, null, 1, null, null, 4),
   ('supplements', 'nutrition', 'Supplements',         'Creatine, vitamins, etc.', 'pill',     'check', 2, null, 1, null, null, 5),
-  ('study_time',  'study',     'Focused study',       '+5 per 30 min',          'timer',      'count', 5, 'min', 30, 120, null, 1),
+  ('study_time',  'study',     'Focused study',       null,                     'timer',      'count', 5, 'min', 30, 120, null, 1),
   ('reading',     'study',     'Read 20 min',         'Books, not reels',       'book-open',  'check', 3, null, 1, null, null, 2),
-  ('sleep_hours', 'sleep',     'Hours slept',         null,                     'bed',        'choice', 0, null, 1, null,
-     '[{"label":"<6h","points":0},{"label":"6–7h","points":8},{"label":"7–9h","points":15},{"label":"9h+","points":8}]', 1),
+  ('sleep_hours', 'sleep',     'Hours slept',         '7–9h is the sweet spot', 'bed',        'band', 0, 'min', 30, null,
+     '[{"from":0,"label":"0–3h","points":0},{"from":240,"label":"4–6h","points":8},{"from":420,"label":"7–9h","points":15},{"from":570,"label":"9h+","points":10}]', 1),
   ('bedtime',     'sleep',     'In bed on time',      'Before your target time', 'alarm-clock','check', 5, null, 1, null, null, 2),
   ('junk',        'vices',     'Junk food',           '-5 per serving',         'pizza',      'count', 5, 'serving', 1, 3, null, 1),
   ('alcohol',     'vices',     'Alcohol',             null,                     'wine',       'check', 10, null, 1, null, null, 2),
   ('smoke',       'vices',     'Smoked',              null,                     'cigarette',  'check', 10, null, 1, null, null, 3),
   ('weed',        'vices',     'Weed',                null,                     'leaf',       'check', 10, null, 1, null, null, 4)
 on conflict (id) do nothing;
+
+-- How much can be logged at most (points still stop at the caps above)
+update public.activities set log_max = 960 where id in ('study_time', 'sleep_hours'); -- 16 hours
+update public.activities set log_max = 10 where id = 'junk';
 
 -- 40 starter invite codes (random; see them in the Admin tab)
 insert into public.invite_codes (code)

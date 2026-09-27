@@ -19,7 +19,7 @@ export type Category = {
   sort: number;
 };
 
-export type ChoiceOption = { label: string; points: number };
+export type ChoiceOption = { label: string; points: number; from?: number };
 
 export type Activity = {
   id: string;
@@ -27,11 +27,12 @@ export type Activity = {
   name: string;
   hint: string | null;
   icon: string;
-  kind: "check" | "count" | "choice";
+  kind: "check" | "count" | "choice" | "band";
   points: number;
   unit: string | null;
   step: number;
   max_value: number | null;
+  log_max: number | null;
   options: ChoiceOption[] | null;
   sort: number;
   active: boolean;

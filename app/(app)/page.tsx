@@ -95,6 +95,14 @@ export default function TodayPage() {
 
   const valueOf = (id: string) => dayLogs.find((l) => l.activity_id === id)?.value ?? 0;
   const isVoided = (id: string) => dayLogs.find((l) => l.activity_id === id)?.voided ?? false;
+  // Study + sleep (anything logged in minutes) can't add up to more than 24 hours
+  const minuteIds = new Set(activities.filter((x) => x.unit === "min").map((x) => x.id));
+  const maxFor = (id: string) => {
+    const act = activities.find((x) => x.id === id);
+    if (!act || act.unit !== "min") return undefined;
+    const others = dayLogs.filter((l) => minuteIds.has(l.activity_id) && l.activity_id !== id).reduce((t, l) => t + Number(l.value), 0);
+    return Math.min(act.log_max ?? 1440, 1440 - others);
+  };
 
   const positives = categories.filter((c) => !c.is_negative);
   const negatives = categories.filter((c) => c.is_negative);
@@ -180,7 +188,7 @@ export default function TodayPage() {
                 <div className="space-y-0.5">
                   {acts.map((a) => (
                     <ActivityRow key={a.id} a={a} cat={c} value={valueOf(a.id)} voided={isVoided(a.id)}
-                      disabled={!loaded} onChange={(v) => setValue(a.id, v)} />
+                      disabled={!loaded} maxValue={maxFor(a.id)} onChange={(v) => setValue(a.id, v)} />
                   ))}
                 </div>
               </section>

@@ -550,7 +550,7 @@ function Rules() {
             {activities.filter((a) => a.category_id === c.id).map((a) => (
               <div key={a.id} className="flex items-center gap-2 rounded-xl px-1 py-1.5">
                 <p className={`flex-1 truncate text-sm font-semibold ${on[a.id] ? "" : "text-mute line-through"}`}>{a.name}</p>
-                {a.kind === "choice" ? (
+                {a.kind === "choice" || a.kind === "band" ? (
                   <span className="text-xs text-mute">{a.options?.map((o) => o.points).join(" / ")}</span>
                 ) : (
                   <>

@@ -96,7 +96,7 @@ export default function FeedPage() {
   };
 
   const valueText = (a: Activity | undefined, l: Pick<Log, "value">) =>
-    !a ? "" : a.kind === "count" ? fmtCount(a, l.value) : a.kind === "choice" ? a.options?.[l.value - 1]?.label ?? "" : "";
+    !a ? "" : a.kind === "count" || a.kind === "band" ? fmtCount(a, l.value) : a.kind === "choice" ? a.options?.[l.value - 1]?.label ?? "" : "";
 
   return (
     <div className="rise">
