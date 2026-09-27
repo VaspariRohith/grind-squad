@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Eye, EyeOff, ArrowRight } from "lucide-react";
 import AuthLayout from "@/components/AuthLayout";
-import { errMsg, sb, usernameToEmail } from "@/lib/supabase";
+import { errMsg, getLastUsername, getRemember, sb, setLastUsername, setRemember, usernameToEmail } from "@/lib/supabase";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -14,17 +14,24 @@ export default function LoginPage() {
   const [show, setShow] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [remember, setRememberState] = useState(true);
 
   useEffect(() => {
     sb().auth.getSession().then(({ data }) => { if (data.session) router.replace("/"); });
+    // Prefill the last username and the saved "keep me logged in" choice
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setUsername(getLastUsername());
+    setRememberState(getRemember());
   }, [router]);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setBusy(true); setError("");
+    setRemember(remember); // decides where the login is saved
     const { error } = await sb().auth.signInWithPassword({ email: usernameToEmail(username), password });
     setBusy(false);
     if (error) return setError(errMsg(error));
+    setLastUsername(username);
     router.replace("/");
   };
 
@@ -40,6 +47,12 @@ export default function LoginPage() {
             {show ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
           </button>
         </div>
+        <label className="flex cursor-pointer items-center gap-3 px-1 py-1 select-none">
+          <input type="checkbox" checked={remember} onChange={(e) => setRememberState(e.target.checked)}
+            className="h-5 w-5 rounded-md accent-pink-500" />
+          <span className="text-sm font-semibold text-soft">Keep me logged in</span>
+          <span className="ml-auto text-xs text-mute">{remember ? "until you sign out" : "until you close the app"}</span>
+        </label>
         {error && <p className="rise text-sm font-semibold text-rose-400">{error}</p>}
         <button className="btn btn-primary w-full py-4 text-lg" disabled={busy}>
           {busy ? "Signing in…" : <>Let&apos;s go <ArrowRight className="h-5 w-5" /></>}

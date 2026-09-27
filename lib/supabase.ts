@@ -5,14 +5,41 @@ const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
 
 let client: SupabaseClient | null = null;
 
-/** Browser Supabase client. The session is stored on the device. */
+/* ---- "Keep me logged in" ----
+ * On (default): the login is saved on the device (localStorage) and renewed
+ * automatically, so you stay logged in until you tap Sign out.
+ * Off: the login is kept only until the browser/app is closed (sessionStorage). */
+const REMEMBER_KEY = "gs-remember";
+const LAST_USER_KEY = "gs-last-user";
+const safe = <T,>(fn: () => T, fallback: T): T => { try { return fn(); } catch { return fallback; } };
+
+export const getRemember = () => safe(() => localStorage.getItem(REMEMBER_KEY) !== "0", true);
+export const setRemember = (on: boolean) => safe(() => localStorage.setItem(REMEMBER_KEY, on ? "1" : "0"), undefined);
+export const getLastUsername = () => safe(() => localStorage.getItem(LAST_USER_KEY) ?? "", "");
+export const setLastUsername = (u: string) => safe(() => localStorage.setItem(LAST_USER_KEY, u), undefined);
+
+const sessionStore = {
+  getItem: (k: string) => safe(() => localStorage.getItem(k) ?? sessionStorage.getItem(k), null),
+  setItem: (k: string, v: string) => safe(() => {
+    if (getRemember()) { localStorage.setItem(k, v); sessionStorage.removeItem(k); }
+    else { sessionStorage.setItem(k, v); localStorage.removeItem(k); }
+  }, undefined),
+  removeItem: (k: string) => safe(() => { localStorage.removeItem(k); sessionStorage.removeItem(k); }, undefined),
+};
+
+/** Browser Supabase client. The session is stored on the device and refreshed automatically. */
 export function sb(): SupabaseClient {
   if (!client) {
     if (!url || !key) {
       throw new Error("Missing NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY");
     }
     client = createClient(url, key, {
-      auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false },
+      auth: {
+        storage: typeof window === "undefined" ? undefined : sessionStore,
+        persistSession: true,
+        autoRefreshToken: true,
+        detectSessionInUrl: false,
+      },
     });
   }
   return client;

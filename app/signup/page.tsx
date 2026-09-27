@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Eye, EyeOff, Ticket, ArrowRight } from "lucide-react";
 import AuthLayout from "@/components/AuthLayout";
-import { errMsg, sb, usernameToEmail, USERNAME_RE } from "@/lib/supabase";
+import { errMsg, sb, setLastUsername, setRemember, usernameToEmail, USERNAME_RE } from "@/lib/supabase";
 
 export default function SignupPage() {
   const router = useRouter();
@@ -40,8 +40,10 @@ export default function SignupPage() {
       });
       const body = await res.json();
       if (!res.ok) throw new Error(body.error || "Sign up failed");
+      setRemember(true); // new accounts stay logged in by default
       const { error } = await sb().auth.signInWithPassword({ email: usernameToEmail(username), password });
       if (error) throw error;
+      setLastUsername(username);
       router.replace("/");
     } catch (e) {
       setError(errMsg(e));
