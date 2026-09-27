@@ -11,6 +11,7 @@ import { Avatar, PageHeader, Sheet, Toggle, toast } from "@/components/ui";
 import { dayLabel, niceDate, timeAgo } from "@/lib/dates";
 import { fmtPoints } from "@/lib/scoring";
 import { errMsg, sb } from "@/lib/supabase";
+import { copyText } from "@/lib/clipboard";
 import type { Adjustment, Freeze, InviteCode, Log, Profile, Report } from "@/lib/types";
 
 type Tab = "codes" | "points" | "freezes" | "reports" | "members" | "rules";
@@ -88,7 +89,7 @@ function Invites() {
   const [note, setNote] = useState("");
 
   const load = useCallback(async () => {
-    const { data } = await sb().from("invite_codes").select("*").order("created_at").order("code");
+    const { data } = await sb().from("invite_codes").select("*").order("created_at", { ascending: false }).order("code");
     setCodes(data ?? []);
   }, []);
   useEffect(() => {
@@ -100,19 +101,26 @@ function Invites() {
   const shown = codes.filter((c) => filter === "all" ? true : filter === "used" ? !!c.used_by : !c.used_by && !c.revoked);
 
   const link = (code: string) => `${location.origin}/signup?code=${code}`;
+  const [manual, setManual] = useState<string | null>(null); // shown when copying is blocked
+  const inviteText = (c: InviteCode) => `You're invited to Grind Squad. Sign up here: ${link(c.code)}  (invite code: ${c.code})`;
   const share = async (c: InviteCode) => {
-    const text = `You're invited to Grind Squad. Sign up here: ${link(c.code)}  (invite code: ${c.code})`;
-    try {
-      if (navigator.share) await navigator.share({ text });
-      else { await navigator.clipboard.writeText(text); toast.ok("Invite link copied"); }
-    } catch { /* user closed the share sheet */ }
+    const text = inviteText(c);
+    if (navigator.share) {
+      try { await navigator.share({ text }); return; }
+      catch (e) { if ((e as Error).name === "AbortError") return; /* else fall back to copy */ }
+    }
+    if (await copyText(text)) toast.ok("Invite message copied");
+    else setManual(text);
   };
-  const copy = async (code: string) => { await navigator.clipboard.writeText(code); toast.ok(`${code} copied`); };
+  const copy = async (code: string) => {
+    if (await copyText(code)) toast.ok(`${code} copied`);
+    else setManual(code);
+  };
 
   const generate = async () => {
     const { error } = await sb().rpc("admin_generate_invites", { p_count: 10, p_note: null });
     if (error) return toast.err(errMsg(error));
-    toast.ok("10 new codes created"); load();
+    toast.ok("10 new codes added at the top"); setFilter("unused"); load();
   };
   const setRevoked = async (c: InviteCode, revoked: boolean) => {
     const { error } = await sb().from("invite_codes").update({ revoked }).eq("code", c.code);
@@ -178,6 +186,11 @@ function Invites() {
           );
         })}
       </div>
+      <Sheet open={!!manual} onClose={() => setManual(null)} title="Copy this">
+        <p className="mb-3 text-sm text-soft">This browser blocked automatic copying. Press and hold the text below, then Select All → Copy.</p>
+        <textarea readOnly className="field min-h-28 resize-none font-mono text-sm" value={manual ?? ""}
+          onFocus={(e) => e.currentTarget.select()} />
+      </Sheet>
       <Sheet open={!!noteFor} onClose={() => setNoteFor(null)} title={<span className="font-mono">{noteFor?.code}</span>}>
         <label className="text-xs font-bold text-mute">Who is this code for?
           <input className="field mt-1" placeholder="e.g. Rahul" value={note} onChange={(e) => setNote(e.target.value)} />
