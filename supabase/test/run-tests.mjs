@@ -88,7 +88,7 @@ console.log("\nLogging");
 await asUser(amit);
 await q("select set_log($1,'gym',1)", [T]);
 await q("select set_log($1,'run',1)", [T]);
-for (const a of ['protein','water','homecooked','reading']) await q("select set_log($1,$2,1)", [T, a]); // nutrition 20; study raw 23, cap 20
+for (const a of ['protein','water','homecooked']) await q("select set_log($1,$2,1)", [T, a]); // nutrition 20
 await q("select set_log($1,'study_time',1)", [T]); // one toggle -> 20
 await q("select set_log($1,'sleep_hours',480)", [T]); // 8h sleep -> 15
 await q("select set_log($1,'junk',5)", [T]);         // max 3 servings -> -15
@@ -99,9 +99,9 @@ await q("select set_log($1,'gym',1)", [addDays(-1)]);
 ok(true, "can log yesterday");
 await expectError(() => q("select set_log($1,'gym',1)", [addDays(-2)]), "only log today or yesterday", "2 days ago blocked");
 await expectError(() => q("select set_log($1,'gym',1)", [addDays(1)]), "only log today or yesterday", "tomorrow blocked");
-await q("select set_log($1,'reading',1)", [T]);
-await q("select set_log($1,'reading',0)", [T]);
-ok((await q("select count(*)::int c from logs where user_id=$1 and activity_id='reading'", [amit]))[0].c === 0, "value 0 removes entry");
+await q("select set_log($1,'bedtime',1)", [T]);
+await q("select set_log($1,'bedtime',0)", [T]);
+ok((await q("select count(*)::int c from logs where user_id=$1 and activity_id='bedtime'", [amit]))[0].c === 0, "value 0 removes entry");
 await expectError(() => q("insert into logs (user_id, day, activity_id, category_id) values ($1,$2,'gym','fitness')", [amit, T]), "permission", "direct insert into logs blocked");
 await expectError(() => q("update profiles set is_admin = true where id = $1", [amit]), "permission", "user can't make self admin");
 await q("update profiles set display_name='Amit K' where id=$1", [amit]);
@@ -368,6 +368,16 @@ console.log("\nMigration 002 (old database -> new rules)");
   await db2.exec(`set role authenticated;`);
   ok((await q2("select points from set_log($1,'study_time',1)", [d]))[0].points === 20, "study toggle works after migration");
   await db2.exec(`reset role;`);
+
+  // Migration 007: reading removed
+  await db2.exec(`set role authenticated;`);
+  await q2("select set_log($1,'reading',1)", [d]);
+  await db2.exec(`reset role;`);
+  const m7 = readFileSync(new URL("../migrations/007_remove_reading.sql", import.meta.url), "utf8");
+  await db2.exec(m7); await db2.exec(m7);
+  const sAct = (await q2("select id from activities where category_id='study' and active")).map((r) => r.id);
+  const rLogs = (await q2("select count(*)::int c from logs where activity_id='reading'"))[0].c;
+  ok(sAct.join() === "study_time" && rLogs === 0, `study list is just Study; today's reading dropped (${sAct}, ${rLogs} left)`);
 }
 console.log(failures ? `\n${failures} FAILURE(S)` : "\nAll tests passed.");
 process.exit(failures ? 1 : 0);
