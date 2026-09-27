@@ -737,6 +737,15 @@ revoke all on all tables in schema public from anon;
 revoke execute on all functions in schema public from anon, public;
 grant execute on all functions in schema public to authenticated;
 
+-- Explicit table access for signed-in users (row rules below still apply).
+-- Written out so it works even if "automatically expose new tables" is off.
+grant usage on schema public to authenticated;
+grant select on all tables in schema public to authenticated;
+grant insert, update, delete on public.invite_codes to authenticated;
+grant update on public.app_settings, public.categories, public.activities to authenticated;
+grant insert, delete on public.adjustments to authenticated;
+grant delete on public.freezes to authenticated;
+
 -- Settings
 drop policy if exists "read settings" on public.app_settings;
 create policy "read settings" on public.app_settings for select to authenticated using (true);

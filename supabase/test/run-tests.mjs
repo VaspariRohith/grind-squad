@@ -36,7 +36,7 @@ await db.exec(`
   alter default privileges in schema public grant all on tables to authenticated, anon;
 `);
 await db.exec(readFileSync(new URL("../schema.sql", import.meta.url), "utf8"));
-await db.exec(`grant all on all tables in schema public to authenticated;`);
+await db.exec(`revoke all on all tables in schema public from authenticated;`); // start with nothing: the schema must grant what it needs
 // (Supabase grants table privileges by default; the schema then revokes what it must.)
 // Re-run the revokes/grants part so they apply after the blanket grant above:
 {
