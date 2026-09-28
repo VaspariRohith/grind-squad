@@ -33,6 +33,13 @@ body {
 
 /* iPhone notch / home bar */
 .pt-safe { padding-top: max(env(safe-area-inset-top), 12px); }
+/* iOS 26+ draws a blur band ~38pt deep under the status bar in home-screen
+   apps. Start the content below it so the top line stays sharp. */
+@supports (-webkit-touch-callout: none) {
+  @media (display-mode: standalone) {
+    .pt-safe { padding-top: calc(env(safe-area-inset-top) + 2.5rem); }
+  }
+}
 .pb-safe { padding-bottom: max(env(safe-area-inset-bottom), 10px); }
 .pb-nav { padding-bottom: calc(env(safe-area-inset-bottom) + 96px); }
 

@@ -32,7 +32,7 @@ export default function FeedPage() {
     await s.rpc("resolve_due_reports");
     const since = new Date(Date.now() - 3 * 86400e3).toISOString();
     const [l, a, f, r, v, n] = await Promise.all([
-      s.from("logs").select("*").eq("is_negative", false).gte("day", from).order("created_at", { ascending: false }),
+      s.from("logs").select("*").gte("day", from).order("created_at", { ascending: false }),
       s.from("adjustments").select("*").gte("day", from).order("created_at", { ascending: false }),
       s.from("freezes").select("*").eq("status", "approved").gte("end_day", from).lte("start_day", today),
       s.from("reports").select("*, logs(activity_id, day, value, user_id, points)")
@@ -191,20 +191,22 @@ export default function FeedPage() {
                         const a = act(l.activity_id);
                         const c = catOf(a);
                         const underVote = !!openFor(l.id);
+                        const slip = !!c?.is_negative;
                         return (
                           <button key={l.id} onClick={() => setPicked(l)}
                             className={`flex items-center gap-1.5 rounded-full py-1.5 pr-3 pl-2 text-xs font-bold transition active:scale-95 ${l.voided ? "line-through opacity-50" : ""}`}
-                            style={{ background: `${c?.color_from ?? "#fff"}1f`, color: c?.color_from }}>
+                            style={slip ? { background: "rgba(244,63,94,.14)", color: "#fb7185", boxShadow: "inset 0 0 0 1px rgba(244,63,94,.3)" }
+                              : { background: `${c?.color_from ?? "#fff"}1f`, color: c?.color_from }}>
                             <Icon name={a?.icon ?? ""} className="h-3.5 w-3.5" />
                             <span className="text-white">{a?.name}{valueText(a, l) && ` · ${valueText(a, l)}`}</span>
                             <span>{fmtPoints(l.points)}</span>
                             {underVote ? <Flag className="h-3 w-3 text-amber-300" fill="currentColor" />
-                              : uid !== me.id && !l.voided && <Flag className="h-3 w-3 text-white/35" />}
+                              : uid !== me.id && !l.voided && !slip && <Flag className="h-3 w-3 text-white/35" />}
                           </button>
                         );
                       })}
                     </div>
-                    {uid !== me.id && (
+                    {uid !== me.id && items.some((l) => !catOf(act(l.activity_id))?.is_negative) && (
                       <p className="mt-2.5 flex items-center gap-1 text-[11px] font-semibold text-mute">
                         <Flag className="h-3 w-3" /> Looks off? Tap an entry to report it.
                       </p>
@@ -259,6 +261,8 @@ export default function FeedPage() {
                 <p className="mt-4 text-sm text-rose-300">This entry was removed by a vote.</p>
               ) : own ? (
                 <p className="mt-4 text-sm text-mute">This is your entry. Edit it on the Today tab.</p>
+              ) : c?.is_negative ? (
+                <p className="mt-4 text-sm text-mute">Slip-ups can&apos;t be reported. Owning up is the honest move.</p>
               ) : existing ? (
                 <p className="mt-4 text-sm text-amber-200">Already under vote. Cast yours in Open votes above.</p>
               ) : tooOld ? (

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Flame, Snowflake, Trophy, EyeOff, ShieldAlert } from "lucide-react";
+import { Flame, Snowflake, Trophy, Eye, ShieldAlert } from "lucide-react";
 import { useApp } from "@/components/AppProvider";
 import ActivityRow from "@/components/ActivityRow";
 import { IconTile } from "@/components/Icon";
@@ -204,7 +204,7 @@ export default function TodayPage() {
                   <IconTile name={c.icon} from={c.color_from} to={c.color_to} />
                   <div className="flex-1">
                     <h2 className="text-lg font-extrabold">{c.name}</h2>
-                    <p className="flex items-center gap-1 text-xs text-mute"><EyeOff className="h-3 w-3" /> Only you and the admin see these</p>
+                    <p className="flex items-center gap-1 text-xs text-mute"><Eye className="h-3 w-3" /> The squad sees these in the feed</p>
                   </div>
                   <span className="chip text-sm" style={{ color: (b?.points ?? 0) < 0 ? "#fb7185" : undefined }}>{b?.points ?? 0}</span>
                 </div>
