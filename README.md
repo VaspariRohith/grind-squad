@@ -91,8 +91,7 @@ Open the link in **Safari** → **Share** → **Add to Home Screen**. It opens f
 - **Someone cheated:** Admin → Points → pick them, pick −10/−20/etc., write the reason (everyone sees it in the feed).
 - **Freeze requests:** Admin → Freezes → Approve / Deny, or freeze someone directly.
 - **Change scoring:** Admin → Rules. Changes apply to new entries; past points stay as logged.
-- **Timezone:** "today" follows `America/Chicago`. To change it, run in SQL Editor:
-  `update app_settings set timezone = 'America/New_York';`
+- **Timezones:** each member's "today" follows their own timezone, saved automatically from their phone the first time they open the app. Only the admin can change it afterwards (Admin → Members → Timezone), e.g. when someone moves or travels. Leaderboards compare by date, and monthly/yearly awards wait until the period has ended for everyone. `app_settings.timezone` is only the fallback for members whose timezone isn't set yet.
 - **Report limit / voting window:** `update app_settings set reports_per_day = 3, vote_hours = 24;`
 
 ## Developing locally
