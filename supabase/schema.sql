@@ -563,7 +563,8 @@ declare
 begin
   if v_uid is null then raise exception 'Not signed in'; end if;
   select * into l from logs where id = p_log;
-  if l.id is null or l.is_negative then raise exception 'Entry not found'; end if;
+  if l.id is null then raise exception 'Entry not found'; end if;
+  if l.is_negative then raise exception 'Slip-ups can''t be reported'; end if;
   if l.user_id = v_uid then raise exception 'You cannot report your own entry'; end if;
   if l.voided then raise exception 'This entry was already removed'; end if;
   if l.day < user_today(v_uid) - 6 then raise exception 'Only entries from the last 7 days can be reported'; end if;
@@ -846,11 +847,10 @@ drop policy if exists "admin activities" on public.activities;
 create policy "admin activities" on public.activities for update to authenticated
   using (public.is_admin()) with check (public.is_admin());
 
--- Logs: read-only through the API. Negative items (junk, alcohol, ...)
--- are visible only to their owner and the admin. Writes via set_log().
+-- Logs: read-only through the API. Everyone in the squad sees every entry,
+-- slip-ups included (they show in the feed). Writes via set_log().
 drop policy if exists "read logs" on public.logs;
-create policy "read logs" on public.logs for select to authenticated
-  using (user_id = auth.uid() or not is_negative or public.is_admin());
+create policy "read logs" on public.logs for select to authenticated using (true);
 revoke insert, update, delete on public.logs from authenticated;
 
 -- Freezes: everyone sees them; you can cancel your own pending request.

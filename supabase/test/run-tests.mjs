@@ -135,10 +135,10 @@ await expectError(() => q("select set_log($1,'gym',60)", [T]), "24 hours", "16h 
 await q("select set_log($1,'study_time',0)", [T]);
 await q("select set_log($1,'sleep_hours',0)", [T]);
 
-console.log("\nPrivacy of negatives");
+console.log("\nSlip-ups are visible to the squad");
 await asUser(sam);
 const seen = await q("select activity_id from logs where user_id=$1", [amit]);
-ok(!seen.some((r) => ["junk", "alcohol"].includes(r.activity_id)), "others can't see junk/alcohol entries");
+ok(["junk", "alcohol"].every((id) => seen.some((r) => r.activity_id === id)), "others can see junk/alcohol entries");
 ok(seen.some((r) => r.activity_id === "gym"), "others can see gym entry");
 const lbSam = await q("select * from leaderboard($1,$1)", [T]);
 ok(lbSam.find((r) => r.username === "amit").points === 65, `but net score includes negatives (${lbSam.find((r) => r.username === "amit").points})`);
@@ -181,7 +181,7 @@ await expectError(() => q("select create_report($1,'self')", [kg.id]), "own entr
 await asUser(amit);
 const junkLog = (await q("select id from logs where user_id=$1 and activity_id='junk'", [amit]))[0].id;
 await asUser(neha);
-await expectError(() => q("select create_report($1,'hidden')", [junkLog]), "not found", "can't report hidden negative entry");
+await expectError(() => q("select create_report($1,'hidden')", [junkLog]), "can't be reported", "slip-ups can't be reported");
 
 // Report 1: remove wins
 let r1 = (await q("select * from create_report($1,'No way he went to the gym')", [kg.id]))[0];
@@ -473,6 +473,12 @@ console.log("\nMigration 002 (old database -> new rules)");
   await db2.exec(`set role authenticated;`);
   ok((await q2("select points from set_log($1,'study_time',240)", [t9]))[0].points === 14, "study 4h -> 14 after migration 010");
   await db2.exec(`reset role;`);
+
+  // Migration 011: slip-ups visible to everyone
+  const m11 = readFileSync(new URL("../migrations/011_public_slipups.sql", import.meta.url), "utf8");
+  await db2.exec(m11); await db2.exec(m11);
+  const pol = (await q2("select qual from pg_policies where tablename='logs' and policyname='read logs'"))[0]?.qual;
+  ok(pol === "true", `migration 011: everyone can read all logs (policy: ${pol})`);
   await db2.exec(`reset role;`);
 }
 console.log(failures ? `\n${failures} FAILURE(S)` : "\nAll tests passed.");
