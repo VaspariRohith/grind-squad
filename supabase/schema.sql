@@ -930,9 +930,9 @@ insert into public.activities (id, category_id, name, hint, icon, kind, points, 
      '[{"from":0,"label":"0–3h","points":0},{"from":240,"label":"4–6h","points":8},{"from":420,"label":"7–9h","points":15},{"from":570,"label":"9h+","points":10}]', 1),
   ('bedtime',     'sleep',     'In bed on time',      'Before your target time', 'alarm-clock','check', 5, null, 1, null, null, 2),
   ('junk',        'vices',     'Junk food',           '-5 per serving',         'pizza',      'count', 5, 'serving', 1, 3, null, 1),
-  ('alcohol',     'vices',     'Alcohol',             null,                     'wine',       'check', 10, null, 1, null, null, 2),
-  ('smoke',       'vices',     'Smoked',              null,                     'cigarette',  'check', 10, null, 1, null, null, 3),
-  ('weed',        'vices',     'Kasuri methi',        null,                     'leaf',       'check', 20, null, 1, null, null, 4)
+  ('alcohol',     'vices',     'Preservative drinks', null,                     'cup-soda',     'check', 10, null, 1, null, null, 2),
+  ('smoke',       'vices',     'Pollution',           null,                     'factory',    'check', 10, null, 1, null, null, 3),
+  ('weed',        'vices',     'Spoilt green veggies', null,                     'leaf',       'check', 20, null, 1, null, null, 4)
 on conflict (id) do nothing;
 
 -- How much can be logged at most (points still stop at the caps above)

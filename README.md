@@ -25,7 +25,7 @@ An invite-only daily habit competition for a friend group. Log skincare, fitness
 - **Logging:** only today and yesterday, only for yourself.
 - **Daily caps:** Skincare 10, Fitness 35, Nutrition 20, Study 20, Sleep 20 → max 105/day. Slip-ups max −55/day.
 - **Counters:** Workout +5 per 30 min (up to 1h30), Steps +2 per 1k (up to 10k), Study +4 for each of the first 2 hours then +3 per hour (up to 6h).
-- **Slip-ups** (junk food, alcohol, smoking, kasuri methi) show up in the feed for everyone, in red. They can't be reported, since a report can only remove an entry.
+- **Slip-ups** (junk food, preservative drinks, pollution, spoilt green veggies) show up in the feed for everyone, in red. They can't be reported, since a report can only remove an entry.
 - **Freezes:** a user requests a day or a range (trip); the admin approves. A frozen day scores 0, can't be logged, and doesn't break the streak.
 - **Reports:** max 3 per person per day. The reporter's report counts as a "remove" vote. Everyone except the reported person votes, anonymously, within 24h. At least half must vote, or the entry stays. More remove → entry voided. More keep → stays. Tie → one revote. Tie again → admin decides.
 - **Streak day:** any day with positive points from logged habits (not frozen). Not having logged *today yet* doesn't break it.

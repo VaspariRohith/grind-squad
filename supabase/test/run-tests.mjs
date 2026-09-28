@@ -479,6 +479,10 @@ console.log("\nMigration 002 (old database -> new rules)");
   await db2.exec(m11); await db2.exec(m11);
   const pol = (await q2("select qual from pg_policies where tablename='logs' and policyname='read logs'"))[0]?.qual;
   ok(pol === "true", `migration 011: everyone can read all logs (policy: ${pol})`);
+  const m12 = readFileSync(new URL("../migrations/012_rename_slipups.sql", import.meta.url), "utf8");
+  await db2.exec(m12); await db2.exec(m12);
+  const names = (await q2("select string_agg(name, ', ' order by sort) n from activities where category_id='vices'"))[0].n;
+  ok(names === "Junk food, Preservative drinks, Pollution, Spoilt green veggies", `migration 012 names: ${names}`);
   await db2.exec(`reset role;`);
 }
 console.log(failures ? `\n${failures} FAILURE(S)` : "\nAll tests passed.");
