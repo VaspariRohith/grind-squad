@@ -50,5 +50,13 @@ export const fmtCount = (a: Activity, v: number) => {
     const m = v % 60;
     return h ? `${h}h${m ? ` ${m}m` : ""}` : `${m}m`;
   }
+  if (a.unit === "k") return `${v}k`;
   return `${v} ${a.unit ?? ""}${v === 1 || !a.unit ? "" : "s"}`.trim();
+};
+
+/** "30 min", "1k steps", "serving" — what one step of a counter means. */
+export const stepLabel = (a: Activity) => {
+  if (a.unit === "min") return a.step >= 60 && a.step % 60 === 0 ? `${a.step / 60}h` : `${a.step} min`;
+  if (a.unit === "k") return `${a.step}k steps`;
+  return a.step === 1 ? (a.unit ?? "") : `${a.step} ${a.unit ?? ""}s`;
 };

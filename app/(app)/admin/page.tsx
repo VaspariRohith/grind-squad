@@ -9,7 +9,7 @@ import Icon from "@/components/Icon";
 import { rangeLabel } from "@/components/FreezeSheet";
 import { Avatar, PageHeader, Sheet, Toggle, toast } from "@/components/ui";
 import { dayLabel, niceDate, timeAgo } from "@/lib/dates";
-import { fmtPoints } from "@/lib/scoring";
+import { fmtPoints, stepLabel } from "@/lib/scoring";
 import { errMsg, sb, USERNAME_RE } from "@/lib/supabase";
 import { copyText } from "@/lib/clipboard";
 import { COMMON_TZ, tzLabel } from "@/lib/dates";
@@ -600,7 +600,7 @@ function Rules() {
                   <span className="text-xs text-mute">{a.options?.map((o) => o.points).join(" / ")}</span>
                 ) : (
                   <>
-                    <span className="text-xs text-mute">{a.kind === "count" ? `per ${a.step}${a.unit === "min" ? "m" : ` ${a.unit}`}` : ""}</span>
+                    <span className="text-xs text-mute">{a.kind === "count" ? `per ${stepLabel(a)}` : ""}</span>
                     <input className="field w-16 py-1.5 text-center text-sm" type="number" inputMode="numeric" value={pts[a.id]}
                       onChange={(e) => setPts({ ...pts, [a.id]: Math.max(0, parseInt(e.target.value) || 0) })} />
                   </>

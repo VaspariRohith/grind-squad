@@ -4,7 +4,7 @@ import { Minus, Plus } from "lucide-react";
 import Icon from "./Icon";
 import { Toggle } from "./ui";
 import type { Activity, Category } from "@/lib/types";
-import { activityPoints, fmtCount, fmtPoints } from "@/lib/scoring";
+import { activityPoints, fmtCount, fmtPoints, stepLabel } from "@/lib/scoring";
 
 /** One loggable habit. Checks get a switch, counts and hour clocks get − / + buttons,
  *  choices get a row of buttons. `maxValue` caps the + button (e.g. the 24h rule). */
@@ -43,8 +43,12 @@ export default function ActivityRow({ a, cat, value, voided, disabled, maxValue,
           {voided ? <p className="text-xs text-rose-400">Removed by a squad vote</p>
             : a.kind === "count" ? (
               <p className="truncate text-xs text-mute">
-                {value > 0 && <b style={{ color: tint }}>{fmtPoints(pts)} · </b>}
-                {cat.is_negative ? "−" : "+"}{a.points} per {a.unit === "min" ? `${a.step} min` : a.unit}
+                {value > 0 && !cat.is_negative && a.max_value
+                  ? <b style={{ color: tint }}>{fmtPoints(pts)} of {a.points * Math.floor(a.max_value / (a.step || 1))} pts</b>
+                  : <>
+                    {value > 0 && <b style={{ color: tint }}>{fmtPoints(pts)} · </b>}
+                    {cat.is_negative ? "−" : "+"}{a.points} per {stepLabel(a)}
+                  </>}
               </p>
             ) : a.kind === "band" ? (
               <p className="truncate text-xs text-mute">
