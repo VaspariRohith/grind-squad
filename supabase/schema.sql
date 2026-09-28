@@ -449,7 +449,7 @@ begin
   if a.unit = 'min' and p_value + coalesce((
       select sum(l.value) from logs l join activities x on x.id = l.activity_id
        where l.user_id = v_uid and l.day = p_day and x.unit = 'min' and l.activity_id <> p_activity), 0) > 1440 then
-    raise exception 'Study and sleep together can''t be more than 24 hours';
+    raise exception 'Study, sleep and workout together can''t be more than 24 hours';
   end if;
 
   insert into logs (user_id, day, activity_id, category_id, value, points, is_negative)
@@ -908,7 +908,7 @@ create policy "avatar delete own" on storage.objects for delete to authenticated
 -- =====================================================================
 insert into public.categories (id, name, icon, color_from, color_to, daily_cap, is_negative, sort) values
   ('skincare',  'Skincare',  'sparkles', '#FF5FA2', '#FF9A6B', 10, false, 1),
-  ('fitness',   'Fitness',   'dumbbell', '#FF7A1A', '#FF2E4D', 30, false, 2),
+  ('fitness',   'Fitness',   'dumbbell', '#FF7A1A', '#FF2E4D', 35, false, 2),
   ('nutrition', 'Nutrition', 'apple',    '#1FD17A', '#B6F03C', 20, false, 3),
   ('study',     'Study',     'book',     '#3B82F6', '#22D3EE', 20, false, 4),
   ('sleep',     'Sleep',     'moon',     '#8B5CF6', '#C084FC', 20, false, 5),
@@ -919,23 +919,26 @@ insert into public.activities (id, category_id, name, hint, icon, kind, points, 
   ('skin_am',     'skincare',  'Morning routine',     'Cleanse + moisturize',   'sun',        'check', 4, null, 1, null, null, 1),
   ('skin_pm',     'skincare',  'Night routine',       'Cleanse + treat',        'moon-star',  'check', 4, null, 1, null, null, 2),
   ('sunscreen',   'skincare',  'Sunscreen',           'SPF before going out',   'sun-medium', 'check', 2, null, 1, null, null, 3),
-  ('gym',         'fitness',   'Workout',             'Gym or home, 30+ min',   'dumbbell',   'check', 15, null, 1, null, null, 1),
-  ('run',         'fitness',   'Run or 10k steps',    'A 2+ km run or 10,000 steps', 'footprints', 'check', 15, null, 1, null, null, 2),
+  ('gym',         'fitness',   'Workout',             'Gym or home workout',    'dumbbell',   'count', 5, 'min', 30, 90, null, 1),
+  ('steps',       'fitness',   'Steps',               'Walks and runs both count', 'footprints', 'count', 2, 'k', 1, 10, null, 2),
   ('protein',     'nutrition', 'Hit calorie/diet goal', 'Stuck to your plan today', 'target',   'check', 10, null, 1, null, null, 1),
   ('water',       'nutrition', '3L water',            null,                     'droplets',   'check', 5, null, 1, null, null, 2),
   ('homecooked',  'nutrition', 'Home-cooked meal',    null,                     'chef-hat',   'check', 5, null, 1, null, null, 3),
-  ('study_time',  'study',     'Study',               'Anything, at least 30 min', 'book',     'check', 20, null, 1, null, null, 1),
+  ('study_time',  'study',     'Study',               'First 2h: +4 each, then +3 each', 'book', 'band', 0, 'min', 60, null,
+     '[{"from":60,"label":"1h","points":4},{"from":120,"label":"2h","points":8},{"from":180,"label":"3h","points":11},{"from":240,"label":"4h","points":14},{"from":300,"label":"5h","points":17},{"from":360,"label":"6h","points":20}]', 1),
   ('sleep_hours', 'sleep',     'Hours slept',         '7–9h is the sweet spot', 'bed',        'band', 0, 'min', 30, null,
      '[{"from":0,"label":"0–3h","points":0},{"from":240,"label":"4–6h","points":8},{"from":420,"label":"7–9h","points":15},{"from":570,"label":"9h+","points":10}]', 1),
   ('bedtime',     'sleep',     'In bed on time',      'Before your target time', 'alarm-clock','check', 5, null, 1, null, null, 2),
   ('junk',        'vices',     'Junk food',           '-5 per serving',         'pizza',      'count', 5, 'serving', 1, 3, null, 1),
   ('alcohol',     'vices',     'Alcohol',             null,                     'wine',       'check', 10, null, 1, null, null, 2),
   ('smoke',       'vices',     'Smoked',              null,                     'cigarette',  'check', 10, null, 1, null, null, 3),
-  ('weed',        'vices',     'Weed',                null,                     'leaf',       'check', 20, null, 1, null, null, 4)
+  ('weed',        'vices',     'Kasuri methi',        null,                     'leaf',       'check', 20, null, 1, null, null, 4)
 on conflict (id) do nothing;
 
 -- How much can be logged at most (points still stop at the caps above)
-update public.activities set log_max = 960 where id = 'sleep_hours'; -- 16 hours
+update public.activities set log_max = 960 where id in ('sleep_hours', 'study_time'); -- 16 hours
+update public.activities set log_max = 240 where id = 'gym';   -- 4 hours
+update public.activities set log_max = 50 where id = 'steps';  -- 50k steps
 update public.activities set log_max = 10 where id = 'junk';
 
 -- 40 starter invite codes (random; see them in the Admin tab)
