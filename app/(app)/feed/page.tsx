@@ -100,7 +100,7 @@ export default function FeedPage() {
 
   return (
     <div className="rise">
-      <PageHeader title="Squad Feed" sub={`Something look off? Tap it to report. ${left} report${left === 1 ? "" : "s"} left today.`}
+      <PageHeader title="Squad Feed" sub={`Tap a friend's entry to report it. ${left} report${left === 1 ? "" : "s"} left today.`}
         right={<button onClick={load} className="grid h-11 w-11 place-items-center rounded-2xl bg-white/[0.07]" aria-label="Refresh"><RefreshCw className="h-5 w-5" /></button>} />
 
       {/* Open votes */}
@@ -194,11 +194,17 @@ export default function FeedPage() {
                             <Icon name={a?.icon ?? ""} className="h-3.5 w-3.5" />
                             <span className="text-white">{a?.name}{valueText(a, l) && ` · ${valueText(a, l)}`}</span>
                             <span>{fmtPoints(l.points)}</span>
-                            {underVote && <Flag className="h-3 w-3 text-amber-300" />}
+                            {underVote ? <Flag className="h-3 w-3 text-amber-300" fill="currentColor" />
+                              : uid !== me.id && !l.voided && <Flag className="h-3 w-3 text-white/35" />}
                           </button>
                         );
                       })}
                     </div>
+                    {uid !== me.id && (
+                      <p className="mt-2.5 flex items-center gap-1 text-[11px] font-semibold text-mute">
+                        <Flag className="h-3 w-3" /> Looks off? Tap an entry to report it.
+                      </p>
+                    )}
                   </div>
                 );
               })}
