@@ -298,6 +298,50 @@ await expectError(() => q("select * from leaderboard('2020-01-01','2030-01-01')"
 const lbFinal = await (async () => { await asUser(rohith); return q("select username, points, current_streak, rank from leaderboard($1,$1)", [T]); })();
 console.log("\nToday's leaderboard:", lbFinal);
 
+// ---- Per-person timezones ----
+console.log("\nPer-person timezones");
+{
+  const dateIn = (tz, offsetDays = 0) => {
+    const d = new Date(Date.now() + offsetDays * 86400e3);
+    return new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" }).format(d);
+  };
+  const tdy = async (uid) => (await q("select user_today($1)::text d", [uid]))[0].d;
+  await asUser(neha);
+  ok((await q("select set_my_timezone('Asia/Kolkata') tz"))[0].tz === "Asia/Kolkata", "first open sets Neha's timezone from her phone");
+  ok((await q("select set_my_timezone('Pacific/Kiritimati') tz"))[0].tz === "Asia/Kolkata", "she can't change it herself afterwards");
+  await expectError(() => q("select set_my_timezone('Mars/Olympus')"), "Unknown timezone", "made-up timezone rejected");
+  await expectError(() => q("select admin_set_timezone($1,'Asia/Tokyo')", [neha]), "Admins only", "non-admin can't change timezones");
+  await asUser(rohith);
+  await q("select set_my_timezone('America/Chicago')");
+  ok(await tdy(neha) === dateIn("Asia/Kolkata"), `Neha's today follows India (${await tdy(neha)})`);
+  ok(await tdy(rohith) === dateIn("America/Chicago"), `Rohith's today follows Dallas (${await tdy(rohith)})`);
+  ok((await q("select my_today()::text d"))[0].d === dateIn("America/Chicago"), "my_today() gives the caller's own date");
+
+  // A timezone 14 hours ahead is always on a later date than one 11 hours behind:
+  // logging windows must follow each person's own calendar.
+  await q("select admin_set_timezone($1,'Pacific/Kiritimati')", [kai]);
+  await q("select admin_set_timezone($1,'Pacific/Pago_Pago')", [sam]);
+  const kaiToday = await tdy(kai), samToday = await tdy(sam);
+  ok(kaiToday > samToday, `Kai (UTC+14) is on ${kaiToday}, Sam (UTC-11) on ${samToday}`);
+  await asUser(kai);
+  ok((await q("select points from set_log($1,'skin_pm',1)", [kaiToday]))[0].points === 4, "Kai can log his own today");
+  await asPostgres();
+  await q("delete from freezes where user_id = $1", [sam]);
+  await asUser(sam);
+  await expectError(() => q("select set_log($1,'water',1)", [kaiToday]), "only log today or yesterday", "Sam can't log Kai's date (it's tomorrow for him)");
+  ok((await q("select points from set_log($1,'water',1)", [samToday]))[0].points === 5, "Sam logs his own today");
+  const st = (await q("select * from streaks($1)", [kai]))[0];
+  ok(st.current_streak >= 1, `Kai's streak counts his own today (${st.current_streak})`);
+  await asUser(neha);
+  ok((await q("select reports_left_today() n"))[0].n >= 0, "report limit uses Neha's own day");
+
+  // awards wait for the member furthest behind
+  await asPostgres();
+  const minToday = (await q("select least(app_today(), (select min(user_today(id)) from profiles))::text d"))[0].d;
+  ok(minToday === samToday || minToday <= samToday, `month-end waits for the latest timezone (${minToday})`);
+  await q("update profiles set timezone = null where id in ($1,$2)", [kai, sam]);
+}
+
 // ---- Migration 002 on a database built from the previous schema ----
 console.log("\nMigration 002 (old database -> new rules)");
 {
@@ -391,6 +435,15 @@ console.log("\nMigration 002 (old database -> new rules)");
   const dp = (await q2("select * from daily_points($1,$1,$2)", [d, uid2]))[0];
   const posOnly = (await q2("select coalesce(sum(least(t.p, c.daily_cap)),0)::int s from (select category_id, sum(points) p from logs where not is_negative and day=$1 group by 1) t join categories c on c.id=t.category_id", [d]))[0].s;
   ok(wp === -20 && vices === -55 && dp.log_points === posOnly - 55, `weed -20; all slip-ups count in full (-55); day score ${dp.log_points}`);
+
+  // Migration 009: per-person timezones
+  const m9 = readFileSync(new URL("../migrations/009_per_person_timezones.sql", import.meta.url), "utf8");
+  await db2.exec(m9); await db2.exec(m9);
+  await db2.exec(`set role authenticated;`);
+  ok((await q2("select set_my_timezone('Asia/Kolkata') tz"))[0].tz === "Asia/Kolkata", "timezone works after migration 009");
+  const t9 = (await q2("select my_today()::text d"))[0].d;
+  ok((await q2("select points from set_log($1,'gym',1)", [t9]))[0].points === 15, "logging on your own date works after migration 009");
+  await db2.exec(`reset role;`);
 }
 console.log(failures ? `\n${failures} FAILURE(S)` : "\nAll tests passed.");
 process.exit(failures ? 1 : 0);

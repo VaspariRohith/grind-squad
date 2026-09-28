@@ -35,8 +35,26 @@ create table if not exists public.profiles (
   avatar_url text,
   bio text check (char_length(bio) <= 120),
   is_admin boolean not null default false,
+  timezone text,                 -- e.g. 'Asia/Kolkata'; null = app default (app_settings)
   created_at timestamptz not null default now()
 );
+
+-- Each member's "today" follows their own timezone
+create or replace function public.tz_of(p_user uuid) returns text
+language sql stable security definer set search_path = public as $$
+  select coalesce((select timezone from profiles where id = p_user),
+                  (select timezone from app_settings where id = 1))
+$$;
+
+create or replace function public.user_today(p_user uuid) returns date
+language sql stable security definer set search_path = public as $$
+  select (now() at time zone tz_of(p_user))::date
+$$;
+
+create or replace function public.my_today() returns date
+language sql stable security definer set search_path = public as $$
+  select user_today(auth.uid())
+$$;
 
 create or replace function public.is_admin() returns boolean
 language sql stable security definer set search_path = public as $$
@@ -322,7 +340,7 @@ returns table (current_streak int, best_streak int)
 language plpgsql stable security definer set search_path = public as $$
 declare
   v_start date;
-  v_today date := app_today();
+  v_today date := user_today(p_user);
   r record;
   run int := 0;
   best int := 0;
@@ -382,9 +400,9 @@ returns table (total_points int, month_points int, year_points int, days_logged 
                current_streak int, best_streak int)
 language sql stable security definer set search_path = public as $$
   select
-    (select coalesce(sum(points), 0) from daily_points('2000-01-01', app_today(), p_user))::int,
-    (select coalesce(sum(points), 0) from daily_points(date_trunc('month', app_today())::date, app_today(), p_user))::int,
-    (select coalesce(sum(points), 0) from daily_points(date_trunc('year', app_today())::date, app_today(), p_user))::int,
+    (select coalesce(sum(points), 0) from daily_points('2000-01-01', user_today(p_user), p_user))::int,
+    (select coalesce(sum(points), 0) from daily_points(date_trunc('month', user_today(p_user))::date, user_today(p_user), p_user))::int,
+    (select coalesce(sum(points), 0) from daily_points(date_trunc('year', user_today(p_user))::date, user_today(p_user), p_user))::int,
     (select count(distinct day) from logs where user_id = p_user and not voided)::int,
     s.current_streak, s.best_streak
   from streaks(p_user) s
@@ -399,7 +417,7 @@ returns public.logs
 language plpgsql security definer set search_path = public as $$
 declare
   v_uid uuid := auth.uid();
-  v_today date := app_today();
+  v_today date := user_today(v_uid);
   a activities;
   v_existing logs;
   v_row logs;
@@ -451,7 +469,7 @@ language plpgsql security definer set search_path = public as $$
 declare v_row freezes;
 begin
   if auth.uid() is null then raise exception 'Not signed in'; end if;
-  if p_start < app_today() - 1 then raise exception 'Freeze can start yesterday at the earliest'; end if;
+  if p_start < user_today(auth.uid()) - 1 then raise exception 'Freeze can start yesterday at the earliest'; end if;
   insert into freezes (user_id, start_day, end_day, reason)
   values (auth.uid(), p_start, p_end, nullif(trim(p_reason), ''))
   returning * into v_row;
@@ -548,17 +566,17 @@ begin
   if l.id is null or l.is_negative then raise exception 'Entry not found'; end if;
   if l.user_id = v_uid then raise exception 'You cannot report your own entry'; end if;
   if l.voided then raise exception 'This entry was already removed'; end if;
-  if l.day < app_today() - 6 then raise exception 'Only entries from the last 7 days can be reported'; end if;
+  if l.day < user_today(v_uid) - 6 then raise exception 'Only entries from the last 7 days can be reported'; end if;
   if exists (select 1 from reports where log_id = p_log and status in ('open', 'admin_review')) then
     raise exception 'This entry already has an open report';
   end if;
 
   select reports_per_day into v_limit from app_settings where id = 1;
-  select count(*) into v_used from reports where reporter_id = v_uid and created_day = app_today();
+  select count(*) into v_used from reports where reporter_id = v_uid and created_day = user_today(v_uid);
   if v_used >= v_limit then raise exception 'You used all % reports for today', v_limit; end if;
 
-  insert into reports (log_id, reporter_id, reported_user_id, note, closes_at, remove_votes)
-  values (p_log, v_uid, l.user_id, trim(p_note),
+  insert into reports (log_id, reporter_id, reported_user_id, note, created_day, closes_at, remove_votes)
+  values (p_log, v_uid, l.user_id, trim(p_note), user_today(v_uid),
           now() + make_interval(hours => (select vote_hours from app_settings where id = 1)), 1)
   returning * into v_row;
   insert into report_votes (report_id, voter_id, round, vote) values (v_row.id, v_uid, 1, 'remove');
@@ -609,7 +627,7 @@ $$;
 create or replace function public.reports_left_today()
 returns int language sql stable security definer set search_path = public as $$
   select greatest(0, (select reports_per_day from app_settings where id = 1)
-    - (select count(*)::int from reports where reporter_id = auth.uid() and created_day = app_today()))
+    - (select count(*)::int from reports where reporter_id = auth.uid() and created_day = user_today(auth.uid())))
 $$;
 
 create or replace function public.admin_decide_report(p_id uuid, p_remove boolean)
@@ -694,7 +712,8 @@ create or replace function public.finalize_awards()
 returns void language plpgsql security definer set search_path = public as $$
 declare
   v_first date;
-  v_today date := app_today();
+  -- a month is over only when it is over for everyone (the member furthest behind in time)
+  v_today date := least(app_today(), (select min(user_today(id)) from profiles));
   m date;
   y int;
 begin
@@ -710,6 +729,31 @@ begin
       perform award_period(make_date(y, 1, 1), make_date(y, 12, 31), y::text, true);
     end if;
   end loop;
+end $$;
+
+-- =====================================================================
+-- TIMEZONES
+-- The app sets your timezone from your phone the first time you open it.
+-- After that only the admin can change it (so nobody hops timezones to
+-- squeeze in an extra day).
+-- =====================================================================
+create or replace function public.set_my_timezone(p_tz text)
+returns text language plpgsql security definer set search_path = public as $$
+declare v_now text;
+begin
+  if auth.uid() is null then raise exception 'Not signed in'; end if;
+  if not exists (select 1 from pg_timezone_names where name = p_tz) then raise exception 'Unknown timezone'; end if;
+  update profiles set timezone = p_tz where id = auth.uid() and timezone is null;
+  select timezone into v_now from profiles where id = auth.uid();
+  return v_now;
+end $$;
+
+create or replace function public.admin_set_timezone(p_user uuid, p_tz text)
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  if not is_admin() then raise exception 'Admins only'; end if;
+  if not exists (select 1 from pg_timezone_names where name = p_tz) then raise exception 'Unknown timezone'; end if;
+  update profiles set timezone = p_tz where id = p_user;
 end $$;
 
 -- =====================================================================
