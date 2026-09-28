@@ -5,6 +5,7 @@ export type Profile = {
   avatar_url: string | null;
   bio: string | null;
   is_admin: boolean;
+  timezone: string | null;
   created_at: string;
 };
 

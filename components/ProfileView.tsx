@@ -7,6 +7,7 @@ import StreakBadgeArt from "./StreakBadgeArt";
 import { Avatar, PhotoViewer, Sheet } from "./ui";
 import { nextBadge, STREAK_BADGES, type StreakBadge } from "@/lib/badges";
 import { sb } from "@/lib/supabase";
+import { tzLabel } from "@/lib/dates";
 import type { Award, Profile } from "@/lib/types";
 
 type Stats = { total_points: number; month_points: number; year_points: number; days_logged: number; current_streak: number; best_streak: number };
@@ -51,6 +52,7 @@ export default function ProfileView({ profile, actions }: { profile: Profile; ac
         </div>
         <h1 className="relative mt-3 text-2xl font-black">{profile.display_name}</h1>
         <p className="relative text-sm font-semibold text-mute">@{profile.username}{profile.is_admin && " · admin"}</p>
+        {profile.timezone && <p className="relative mt-0.5 text-xs text-mute">🕐 Day runs on {tzLabel(profile.timezone)} time</p>}
         {profile.bio && <p className="relative mx-auto mt-2 max-w-xs text-sm text-soft">{profile.bio}</p>}
         {actions && <div className="relative mt-4">{actions}</div>}
       </section>

@@ -8,7 +8,7 @@ import AwardCard from "@/components/AwardCard";
 import StreakBadgeArt from "@/components/StreakBadgeArt";
 import { Avatar, PageHeader, Segmented, Spinner } from "@/components/ui";
 import { topBadge } from "@/lib/badges";
-import { daysLeftInMonth, monthStart, weekStart, yearStart } from "@/lib/dates";
+import { addDays, daysLeftInMonth, monthEnd, monthStart, weekStart, yearStart } from "@/lib/dates";
 import { sb } from "@/lib/supabase";
 import type { Award, BoardRow } from "@/lib/types";
 
@@ -24,11 +24,13 @@ export default function BoardPage() {
 
   const range = useMemo(() => {
     switch (period) {
+      // Whole periods by date, so friends in a timezone ahead of yours
+      // (already on "tomorrow") are still counted in the right week/month
       case "day": return [today, today];
-      case "week": return [weekStart(today), today];
-      case "month": return [monthStart(today), today];
-      case "ytd": return [yearStart(today), today];
-      default: return ["2000-01-01", today];
+      case "week": return [weekStart(today), addDays(weekStart(today), 6)];
+      case "month": return [monthStart(today), monthEnd(today)];
+      case "ytd": return [yearStart(today), today.slice(0, 5) + "12-31"];
+      default: return ["2000-01-01", addDays(today, 1)];
     }
   }, [period, today]);
 

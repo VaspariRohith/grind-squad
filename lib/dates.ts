@@ -17,6 +17,10 @@ export const weekStart = (iso: string) => {
   return fmt(d);
 };
 export const monthStart = (iso: string) => iso.slice(0, 8) + "01";
+export const monthEnd = (iso: string) => {
+  const d = parse(iso);
+  return fmt(new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0)));
+};
 export const yearStart = (iso: string) => iso.slice(0, 5) + "01-01";
 
 export const daysLeftInMonth = (iso: string) => {
@@ -53,6 +57,24 @@ export const timeLeft = (ts: string) => {
   if (s <= 0) return "closing…";
   if (s < 3600) return `${Math.ceil(s / 60)}m left`;
   return `${Math.floor(s / 3600)}h ${Math.floor((s % 3600) / 60)}m left`;
+};
+
+/** Timezones the admin can pick from (any valid one set by a phone also works). */
+export const COMMON_TZ = [
+  "America/Chicago", "Asia/Kolkata", "America/New_York", "America/Denver", "America/Los_Angeles",
+  "America/Phoenix", "Europe/London", "Europe/Berlin", "Asia/Dubai", "Asia/Singapore", "Australia/Sydney",
+];
+
+/** "Asia/Kolkata" -> "Kolkata (GMT+5:30)" */
+export const tzLabel = (tz: string) => {
+  let offset = "";
+  try {
+    offset = new Intl.DateTimeFormat("en-US", { timeZone: tz, timeZoneName: "shortOffset" })
+      .formatToParts(new Date()).find((p) => p.type === "timeZoneName")?.value ?? "";
+  } catch { /* unknown timezone */ }
+  const FRIENDLY: Record<string, string> = { "America/Chicago": "Dallas / Central", "Asia/Kolkata": "India", "Asia/Calcutta": "India" };
+  const city = FRIENDLY[tz] ?? tz.split("/").pop()?.replace(/_/g, " ") ?? tz;
+  return offset ? `${city} (${offset})` : city;
 };
 
 export const greeting = () => {

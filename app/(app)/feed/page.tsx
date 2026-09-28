@@ -60,7 +60,11 @@ export default function FeedPage() {
   const catOf = (a?: Activity) => categories.find((c) => c.id === a?.category_id);
 
   const groups = useMemo(() => {
-    const days = [today, addDays(today, -1), addDays(today, -2)];
+    // Every date that has activity, newest first. Friends in a timezone ahead of
+    // yours may already be on "tomorrow", so dates come from the data itself.
+    const days = [...new Set([today, addDays(today, -1), addDays(today, -2),
+      ...(logs ?? []).map((l) => l.day), ...adjustments.map((a) => a.day)])]
+      .filter((d) => d >= addDays(today, -2)).sort().reverse();
     return days.map((d) => {
       const byUser = new Map<string, Log[]>();
       for (const l of logs ?? []) if (l.day === d) byUser.set(l.user_id, [...(byUser.get(l.user_id) ?? []), l]);

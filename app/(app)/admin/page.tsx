@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import {
-  AtSign, Check, Copy, Download, Gavel, KeyRound, Plus, Share, ShieldCheck, Snowflake, Ticket, Trash2, UserX, X, Scale, Users, SlidersHorizontal,
+  AtSign, Check, Clock, Copy, Download, Gavel, KeyRound, Plus, Share, ShieldCheck, Snowflake, Ticket, Trash2, UserX, X, Scale, Users, SlidersHorizontal,
 } from "lucide-react";
 import { useApp } from "@/components/AppProvider";
 import Icon from "@/components/Icon";
@@ -12,6 +12,7 @@ import { dayLabel, niceDate, timeAgo } from "@/lib/dates";
 import { fmtPoints } from "@/lib/scoring";
 import { errMsg, sb, USERNAME_RE } from "@/lib/supabase";
 import { copyText } from "@/lib/clipboard";
+import { COMMON_TZ, tzLabel } from "@/lib/dates";
 import type { Adjustment, Freeze, InviteCode, Log, Profile, Report } from "@/lib/types";
 
 type Tab = "codes" | "points" | "freezes" | "reports" | "members" | "rules";
@@ -436,6 +437,8 @@ function Members() {
   const [delFor, setDelFor] = useState<Profile | null>(null);
   const [renameFor, setRenameFor] = useState<Profile | null>(null);
   const [newName, setNewName] = useState("");
+  const [tzFor, setTzFor] = useState<Profile | null>(null);
+  const [tz, setTz] = useState("");
   const [pw, setPw] = useState("");
   const [confirm, setConfirm] = useState("");
   const [busy, setBusy] = useState(false);
@@ -475,6 +478,15 @@ function Members() {
     } catch (e) { toast.err(errMsg(e)); }
     setBusy(false);
   };
+  const saveTz = async () => {
+    if (!tzFor) return;
+    setBusy(true);
+    const { error } = await sb().rpc("admin_set_timezone", { p_user: tzFor.id, p_tz: tz });
+    setBusy(false);
+    if (error) return toast.err(errMsg(error));
+    toast.ok(`@${tzFor.username} now runs on ${tzLabel(tz)}`);
+    setTzFor(null); await reload();
+  };
   const setAdmin = async (p: Profile, v: boolean) => {
     const { error } = await sb().rpc("admin_set_admin", { p_user: p.id, p_admin: v });
     if (error) return toast.err(errMsg(error));
@@ -490,6 +502,7 @@ function Members() {
             <div className="min-w-0 flex-1">
               <p className="truncate font-bold">{m.display_name}</p>
               <p className="text-xs text-mute">@{m.username} · joined {niceDate(m.created_at.slice(0, 10), { month: "short", day: "numeric" })}</p>
+              <p className="text-xs text-mute">🕐 {m.timezone ? tzLabel(m.timezone) : "not set yet (sets itself on next open)"}</p>
             </div>
             <div className="flex flex-col items-center gap-0.5">
               <Toggle on={m.is_admin} disabled={m.id === me.id} from="#34d399" to="#059669" onChange={(v) => setAdmin(m, v)} />
@@ -497,13 +510,21 @@ function Members() {
             </div>
           </div>
           <div className="mt-3 grid grid-cols-2 gap-2">
-            <button className="btn btn-ghost col-span-2 py-2 text-sm" onClick={() => { setRenameFor(m); setNewName(m.username); }}><AtSign className="h-4 w-4" /> Change username</button>
+            <button className="btn btn-ghost py-2 text-sm" onClick={() => { setRenameFor(m); setNewName(m.username); }}><AtSign className="h-4 w-4" /> Username</button>
+            <button className="btn btn-ghost py-2 text-sm" onClick={() => { setTzFor(m); setTz(m.timezone ?? "America/Chicago"); }}><Clock className="h-4 w-4" /> Timezone</button>
             <button className="btn btn-ghost py-2 text-sm" onClick={() => setPwFor(m)}><KeyRound className="h-4 w-4" /> Reset password</button>
             <button className="btn btn-danger py-2 text-sm" disabled={m.id === me.id} onClick={() => setDelFor(m)}><UserX className="h-4 w-4" /> Remove</button>
           </div>
         </div>
       ))}
 
+      <Sheet open={!!tzFor} onClose={() => setTzFor(null)} title={`Timezone for @${tzFor?.username}`}>
+        <p className="mb-3 text-sm text-soft">Their &ldquo;today&rdquo; follows this timezone: when their day starts, what they can log, their streak. Change it if they move or travel for a while.</p>
+        <select className="field" value={tz} onChange={(e) => setTz(e.target.value)}>
+          {[...new Set([tz, ...COMMON_TZ])].filter(Boolean).map((z) => <option key={z} value={z}>{tzLabel(z)}</option>)}
+        </select>
+        <button className="btn btn-primary mt-4 w-full" disabled={busy || tz === tzFor?.timezone} onClick={saveTz}>{busy ? "Saving…" : "Save timezone"}</button>
+      </Sheet>
       <Sheet open={!!renameFor} onClose={() => setRenameFor(null)} title={`Change @${renameFor?.username}`}>
         <p className="mb-3 text-sm text-soft">This is what they type to log in. Their password, points and streaks stay the same.</p>
         <div className="relative">

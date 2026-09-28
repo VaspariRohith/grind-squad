@@ -32,9 +32,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const load = useCallback(async (session: Session) => {
     const s = sb();
+    // First open after the timezone update: save this phone's timezone
+    // (the database ignores it if one is already set; only the admin can change it)
+    const mine = await s.from("profiles").select("timezone").eq("id", session.user.id).single();
+    if (mine.data && !mine.data.timezone) {
+      const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      if (tz) await s.rpc("set_my_timezone", { p_tz: tz });
+    }
     const [me, today, cats, acts, members] = await Promise.all([
       s.from("profiles").select("*").eq("id", session.user.id).single(),
-      s.rpc("app_today"),
+      s.rpc("my_today"), // "today" in this member's own timezone
       s.from("categories").select("*").order("sort"),
       s.from("activities").select("*").order("sort"),
       s.from("profiles").select("*").order("display_name"),
