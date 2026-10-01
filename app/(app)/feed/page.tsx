@@ -1,22 +1,40 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Flag, Gavel, RefreshCw, ShieldAlert, Snowflake, ThumbsDown, ThumbsUp } from "lucide-react";
 import { useApp } from "@/components/AppProvider";
 import Icon from "@/components/Icon";
 import { rangeLabel } from "@/components/FreezeSheet";
 import { Avatar, Empty, PageHeader, Sheet, Spinner, toast } from "@/components/ui";
-import { addDays, dayLabel, timeAgo, timeLeft } from "@/lib/dates";
+import { addDays, dayLabel, niceDate, timeAgo, timeLeft } from "@/lib/dates";
 import { fmtCount, fmtPoints } from "@/lib/scoring";
 import { errMsg, sb } from "@/lib/supabase";
 import type { Activity, Adjustment, Freeze, Log, Report } from "@/lib/types";
 
 type ReportWithLog = Report & { logs: Pick<Log, "activity_id" | "day" | "value" | "user_id" | "points"> | null };
 
+const FIRST_DAYS = 7;   // days shown on open
+const MORE_DAYS = 14;   // days added each time you scroll to the bottom
+const PAGE = 1000;      // Supabase returns at most 1000 rows per request
+
+/** Runs a query page by page so long date ranges never get cut off. */
+async function fetchAll<T>(make: () => { range: (a: number, b: number) => PromiseLike<{ data: T[] | null }> }) {
+  const out: T[] = [];
+  for (let i = 0; ; i += PAGE) {
+    const { data } = await make().range(i, i + PAGE - 1);
+    out.push(...(data ?? []));
+    if (!data || data.length < PAGE) return out;
+  }
+}
+
 export default function FeedPage() {
   const { today, members, me, activities, categories } = useApp();
-  const from = addDays(today, -2);
+  const [span, setSpan] = useState(FIRST_DAYS);
+  const from = addDays(today, -(span - 1));
+  const [first, setFirst] = useState<string | null>(null); // the squad's very first entry
+  const [loadingMore, setLoadingMore] = useState(false);
+  const bottom = useRef<HTMLDivElement>(null);
   const [logs, setLogs] = useState<Log[] | null>(null);
   const [adjustments, setAdjustments] = useState<Adjustment[]>([]);
   const [freezes, setFreezes] = useState<Freeze[]>([]);
@@ -31,17 +49,22 @@ export default function FeedPage() {
     const s = sb();
     await s.rpc("resolve_due_reports");
     const since = new Date(Date.now() - 3 * 86400e3).toISOString();
-    const [l, a, f, r, v, n] = await Promise.all([
-      s.from("logs").select("*").gte("day", from).order("created_at", { ascending: false }),
-      s.from("adjustments").select("*").gte("day", from).order("created_at", { ascending: false }),
+    const [l, a, f, r, v, n, fl, fa] = await Promise.all([
+      fetchAll<Log>(() => s.from("logs").select("*").gte("day", from).order("created_at", { ascending: false }).order("id")),
+      fetchAll<Adjustment>(() => s.from("adjustments").select("*").gte("day", from).order("created_at", { ascending: false }).order("id")),
       s.from("freezes").select("*").eq("status", "approved").gte("end_day", from).lte("start_day", today),
       s.from("reports").select("*, logs(activity_id, day, value, user_id, points)")
         .or(`status.in.(open,admin_review),resolved_at.gte."${since}"`).order("created_at", { ascending: false }),
       s.rpc("my_votes"),
       s.rpc("reports_left_today"),
+      s.from("logs").select("day").order("day").limit(1),
+      s.from("adjustments").select("day").order("day").limit(1),
     ]);
-    setLogs(l.data ?? []);
-    setAdjustments(a.data ?? []);
+    setLogs(l);
+    setAdjustments(a);
+    const firstDays = [fl.data?.[0]?.day, fa.data?.[0]?.day].filter(Boolean) as string[];
+    setFirst(firstDays.length ? firstDays.sort()[0] : today);
+    setLoadingMore(false);
     setFreezes(f.data ?? []);
     setReports((r.data as ReportWithLog[]) ?? []);
     const votes: Record<string, string> = {};
@@ -59,12 +82,23 @@ export default function FeedPage() {
   const act = (id: string) => activities.find((a) => a.id === id);
   const catOf = (a?: Activity) => categories.find((c) => c.id === a?.category_id);
 
+  // Load older days when the bottom of the feed scrolls into view.
+  const hasMore = !!first && from > first;
+  useEffect(() => {
+    const el = bottom.current;
+    if (!el || !hasMore || loadingMore || !logs) return;
+    const io = new IntersectionObserver((e) => {
+      if (e[0].isIntersecting) { setLoadingMore(true); setSpan((n) => n + MORE_DAYS); }
+    }, { rootMargin: "600px" });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [hasMore, loadingMore, logs]);
+
   const groups = useMemo(() => {
     // Every date that has activity, newest first. Friends in a timezone ahead of
     // yours may already be on "tomorrow", so dates come from the data itself.
-    const days = [...new Set([today, addDays(today, -1), addDays(today, -2),
-      ...(logs ?? []).map((l) => l.day), ...adjustments.map((a) => a.day)])]
-      .filter((d) => d >= addDays(today, -2)).sort().reverse();
+    const days = [...new Set([today, ...(logs ?? []).map((l) => l.day), ...adjustments.map((a) => a.day)])]
+      .filter((d) => d >= from).sort().reverse();
     return days.map((d) => {
       const byUser = new Map<string, Log[]>();
       for (const l of logs ?? []) if (l.day === d) byUser.set(l.user_id, [...(byUser.get(l.user_id) ?? []), l]);
@@ -75,7 +109,7 @@ export default function FeedPage() {
         frozen: freezes.filter((f) => d >= f.start_day && d <= f.end_day),
       };
     });
-  }, [logs, adjustments, freezes, today]);
+  }, [logs, adjustments, freezes, today, from]);
 
   const open = reports.filter((r) => r.status === "open" || r.status === "admin_review");
   const closed = reports.filter((r) => r.status !== "open" && r.status !== "admin_review");
@@ -155,11 +189,29 @@ export default function FeedPage() {
         </section>
       )}
 
+      {/* Recent verdicts */}
+      {closed.length > 0 && (
+        <section className="mb-4">
+          <h2 className="mb-2 px-1 text-sm font-extrabold tracking-wider text-mute uppercase">Recent verdicts</h2>
+          <div className="card divide-y divide-white/[0.06]">
+            {closed.map((r) => (
+              <div key={r.id} className="flex items-center gap-3 px-4 py-3 text-sm">
+                <span className="text-lg">{r.status === "removed" ? "❌" : "✅"}</span>
+                <p className="flex-1">
+                  <b>{member(r.reported_user_id)?.display_name}</b>&apos;s {act(r.logs?.activity_id ?? "")?.name ?? "entry"}
+                  <span className="block text-xs text-mute">{r.outcome_note}</span>
+                </p>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
       {/* Activity */}
       {!logs ? (
         <div className="grid h-60 place-items-center"><Spinner /></div>
       ) : logs.length === 0 && adjustments.length === 0 ? (
-        <Empty icon="🦗" title="Quiet in here" sub="Nobody has logged anything in the last 3 days. Be the first." />
+        <Empty icon="🦗" title="Quiet in here" sub="Nobody has logged anything yet. Be the first." />
       ) : (
         groups.map((g) => (g.users.length || g.adj.length || g.frozen.length) ? (
           <section key={g.day} className="mb-6">
@@ -219,22 +271,11 @@ export default function FeedPage() {
         ) : null)
       )}
 
-      {/* Recent verdicts */}
-      {closed.length > 0 && (
-        <section className="mb-4">
-          <h2 className="mb-2 px-1 text-sm font-extrabold tracking-wider text-mute uppercase">Recent verdicts</h2>
-          <div className="card divide-y divide-white/[0.06]">
-            {closed.map((r) => (
-              <div key={r.id} className="flex items-center gap-3 px-4 py-3 text-sm">
-                <span className="text-lg">{r.status === "removed" ? "❌" : "✅"}</span>
-                <p className="flex-1">
-                  <b>{member(r.reported_user_id)?.display_name}</b>&apos;s {act(r.logs?.activity_id ?? "")?.name ?? "entry"}
-                  <span className="block text-xs text-mute">{r.outcome_note}</span>
-                </p>
-              </div>
-            ))}
-          </div>
-        </section>
+      {logs && (logs.length > 0 || adjustments.length > 0) && (
+        <div ref={bottom} className="mb-6 py-4 text-center text-xs font-semibold text-mute">
+          {hasMore ? <span className="inline-flex items-center gap-2"><Spinner className="h-4 w-4" /> Loading older days…</span>
+            : first && <>That&apos;s everything, back to day one ({niceDate(first, { month: "short", day: "numeric", year: "numeric" })}).</>}
+        </div>
       )}
 
       {/* Entry sheet */}
